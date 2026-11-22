@@ -2,7 +2,7 @@
   {
     "id": "Nordic Limewash",
     "note": "Muted sage works with a warm, light ceiling and natural oak.",
-    "tags": { "mood": "Calm", "era": "Contemporary", "use": ["Living rooms"] },
+    "tags": { "warmNeutral": true, "mood": "Calm", "era": "Contemporary", "use": ["Living rooms"] },
     "swatches": [
       { "name": "Soft sage", "hex": "#A9B39E" },
       { "name": "Warm cream", "hex": "#F3E5D5" }
@@ -11,7 +11,7 @@
   {
     "id": "Developer Docs",
     "note": "Deep plum keeps paragraphs readable on cream. Teal highlights actions.",
-    "tags": { "mood": "Focused", "era": "Contemporary", "use": ["Documentation"] },
+    "tags": { "warmNeutral": true, "mood": "Focused", "era": "Contemporary", "use": ["Documentation"] },
     "swatches": [
       { "name": "Warm cream", "hex": "#F3EADF" },
       { "name": "Deep plum", "hex": "#492E46" },
@@ -49,6 +49,7 @@
   },
   {
     "id": "Chocolate & Blues",
+    "tags": { "warmNeutral": true },
     "swatches": [
       { "name": "Chocolate Fondant", "hex": "#513834", "code": "19-1432 TCX" },
       { "name": "Apricot Illusion", "hex": "#D8C2A8", "code": "14-1120 TCX" },

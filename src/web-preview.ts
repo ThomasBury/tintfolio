@@ -68,20 +68,20 @@ export function contrastResults(tokens: WebTokens) {
 
 export function dashboard(tokens: WebTokens) {
   const style = Object.entries(tokens).map(([key, value]) => `--${key}:${value}`).join(";");
-  return `<article id="specimen" style="${style}" aria-label="Sample website">
-    <div class="dashboard-heading"><h3>Workspace</h3><p>Manage your team and plan.</p></div>
+  return `<article id="specimen" data-canvas-role="background" style="${style}" aria-label="Sample website">
+    <div class="dashboard-heading"><h3 data-canvas-role="text">Workspace</h3><p data-canvas-role="text">Manage your team and plan.</p></div>
     <div class="dashboard-grid">
       <section class="dashboard-card" aria-label="Dashboard card">
-        <h4>Activity</h4>
+        <h4 data-canvas-role="text">Activity</h4>
         <p class="dashboard-metric">24 <span class="dashboard-badge">Active</span></p>
         <p class="dashboard-muted">Projects this month</p>
         <div class="dashboard-alert"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 5v3m0 2v1" stroke="currentColor" stroke-width="2"/></svg><span>Usage report is ready</span></div>
       </section>
       <section class="dashboard-card" aria-label="Pricing and inputs">
-        <h4>Plans</h4>
+        <h4 data-canvas-role="text">Plans</h4>
         <table><thead><tr><th scope="col">Plan</th><th scope="col">Monthly</th></tr></thead><tbody><tr><th scope="row">Starter</th><td>$12</td></tr><tr><th scope="row">Team</th><td>$24</td></tr></tbody></table>
         <div class="dashboard-form"><label>Email<input type="email" id="sample-email" placeholder="you@example.com" autocomplete="off"></label>
-        <button type="button" id="specimen-button" aria-label="Try accent">Try</button></div>
+        <button type="button" id="specimen-button" data-canvas-role="accent" aria-label="Tune accent"><span data-canvas-role="onAccent">Try</span></button></div>
       </section>
     </div>
   </article>`;

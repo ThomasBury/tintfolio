@@ -21,14 +21,14 @@ const shell = `<path data-surface="ceiling" fill="var(--ceiling)" d="M0 0h840l-1
   <path data-surface="wall" fill="var(--wall)" d="M0 0l106 49v241L0 364z"/>
   <path data-surface="feature" fill="var(--feature)" d="M106 49h633v241H106z"/>
   <path data-surface="wall" fill="var(--wall)" d="M739 49L840 0v364l-101-74z"/>
-  <path fill="#25291e" opacity=".12" d="M0 0l106 49v241L0 364z"/>
-  <path fill="#fffae8" opacity=".16" d="M739 49L840 0v364l-101-74z"/>
+  <path pointer-events="none" fill="#25291e" opacity=".12" d="M0 0l106 49v241L0 364z"/>
+  <path pointer-events="none" fill="#fffae8" opacity=".16" d="M739 49L840 0v364l-101-74z"/>
   <path data-surface="floor" fill="var(--floor)" d="M0 364l106-74h633l101 74v66H0z"/>
-  <g fill="none" stroke="#000" opacity=".18"><path d="M0 389l210-99M87 430l199-140m-50 140l114-140m36 140l39-140m126 140l-58-140m219 140L557 290m283 119L623 290m217 71l-150-71M72 314h694M36 343h775M0 380h840"/></g>
+  <g pointer-events="none" fill="none" stroke="#000" opacity=".18"><path d="M0 389l210-99M87 430l199-140m-50 140l114-140m36 140l39-140m126 140l-58-140m219 140L557 290m283 119L623 290m217 71l-150-71M72 314h694M36 343h775M0 380h840"/></g>
   <path fill="var(--trim)" d="M0 350l106-70h633l101 70v13l-101-73H106L0 365z"/>
   <path fill="#776953" opacity=".23" d="M0 363l106-74h633l101 73v3l-101-73H106L0 367z"/>
   <g transform="matrix(1 .46 0 1 12 40)"><rect width="76" height="210" fill="#e9e2d0"/><rect x="6" y="6" width="64" height="195" fill="url(#glass)"/><path d="M6 160q18-38 33-8q18-54 31-26v74H6" fill="#adb69a"/><path d="M6 176q15-34 36-12q13-25 28-24v61H6" fill="#8f9e85"/><path d="M38 5v197M4 107h68" stroke="#ece7d6" stroke-width="5"/><path d="M-3 209h83v6H-3" fill="#f1eadb"/></g>
-  <path d="M109 67l148 16-101 175h-47z" fill="#fff3c9" opacity=".12"/>`;
+  <path pointer-events="none" d="M109 67l148 16-101 175h-47z" fill="#fff3c9" opacity=".12"/>`;
 
 const plant = `<g fill="none" stroke="#526047" stroke-width="2.8"><path d="M0 0q-4-78-24-122M1 0q5-68 29-107M-2 0q-16-50-47-76M0 0q19-45 47-61M0 0q-1-90 9-137"/></g>
   <g><use href="#leaf" transform="translate(-18 -97)"/><use href="#leaf" transform="translate(-13 -79) rotate(85)"/><use href="#leaf" transform="translate(17 -77) rotate(25)"/><use href="#leaf" transform="translate(27 -100) rotate(75)"/><use href="#leaf" transform="translate(-38 -68) rotate(-24)"/><use href="#leaf" transform="translate(39 -54) rotate(95)"/><use href="#leaf" transform="translate(7 -125) rotate(28)"/><use href="#leaf" transform="translate(2 -66) rotate(-8)"/><use href="#leaf" transform="translate(-20 -52) rotate(-47)"/></g>

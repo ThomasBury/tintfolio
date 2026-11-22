@@ -5,6 +5,7 @@ import { contrast } from "../src/colour.ts";
 import namedCombinations from "../src/named-combinations.json" with { type: "json" };
 import {
   assignWeb,
+  hasSourceContrast,
   matchingCombinations,
   randomCombination,
   unpackCollection,
@@ -82,4 +83,13 @@ test("every web assignment minimizes source corrections and passes at full preci
   assert.equal(background.hex, "#D96629");
   assert.equal(text.source?.hex, "#0093a5");
   assert.notEqual(text.hex, text.source?.hex.toUpperCase());
+});
+
+test("high contrast uses the original page colours and full ratio", () => {
+  const swatches = [{ name: "White", hex: "#FFFFFF" }, { name: "Gray", hex: "#777773" }];
+  assert.equal(contrast(swatches[0].hex, swatches[1].hex).toFixed(2), "4.50");
+  assert.equal(hasSourceContrast({ id: "Near threshold", swatches }), false);
+  const [background, text] = assignWeb(swatches);
+  assert.ok(contrast(background.hex, text.hex) >= 4.5);
+  assert.equal(hasSourceContrast({ id: "Dark ink", swatches: [swatches[0], { name: "Ink", hex: "#492E46" }] }), true);
 });

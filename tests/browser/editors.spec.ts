@@ -7,9 +7,9 @@ const paintPilot = "/wall-paint/sage-green-and-warm-cream-living-room";
 const webPilot = "/website-colours/high-contrast-cream-and-plum-palette";
 const fill = (page: Page, surface: string) => page.locator(`[data-surface="${surface}"]`).first();
 const rgb = (hex: string) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
-const combinations = (page: Page) => page.getByRole("region", { name: "Colour combinations" });
+const combinations = (page: Page) => page.locator("#library");
 const find = async (page: Page, term: string) => {
-  await page.getByLabel("Search combinations").fill(term);
+  await page.getByLabel("Search palettes").fill(term);
   return combinations(page).locator(".wada-card").first();
 };
 const close = async (page: Page) => page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
@@ -26,7 +26,7 @@ test("combination #48 applies on the sticky room, preserves room and floor, and 
   const library = combinations(page);
   await expect(library.getByRole("button", { name: /Nordic Limewash/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "A Dictionary of Color Combinations" })).toHaveAttribute("href", /seigensha/);
-  await page.getByLabel("Era").selectOption("Early Shōwa");
+  await page.getByLabel("Source").selectOption("wada");
   await expect(library.locator(".wada-card").first()).toContainText("Isabella Color");
   const card = await find(page, "#48");
   await expect(card).toContainText("Combination #48");
@@ -45,7 +45,7 @@ test("combination #48 applies on the sticky room, preserves room and floor, and 
     return box.top >= 0 && box.bottom <= innerHeight;
   })).toBe(true);
   expect(await page.evaluate(() => scrollY)).toBe(scroll);
-  await library.getByRole("button", { name: "Undo palette" }).click();
+  await page.getByRole("button", { name: "Undo palette" }).click();
   await expect(card).toBeFocused();
   await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#123456"));
   await expect(fill(page, "feature")).toHaveCSS("fill", rgb("#998877"));
@@ -64,7 +64,7 @@ test("paint reassigns and swaps roles on the canvas, and prints its surface colo
   await wall.selectOption("2");
   await secondary.selectOption("3");
   await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#A36AA5"));
-  const swap = canvas.getByRole("button", { name: "Swap roles" });
+  const swap = page.getByRole("button", { name: "Swap roles" });
   await swap.press("Space");
   await expect(swap).toBeFocused();
   await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#111314"));
@@ -90,7 +90,7 @@ test("manual paint edits are reflected in the canvas swatch controls", async ({ 
   await page.goto("/paint/");
   await (await find(page, "#344")).click();
   await page.getByText("Room surfaces and swatches", { exact: true }).click();
-  await page.getByText("Edit colours", { exact: true }).click();
+  await page.getByRole("tab", { name: "Tune" }).click();
   await page.locator("#hex").fill("#123456");
   const wall = page.getByLabel("Main wall", { exact: true });
   await expect(wall.locator("option:checked")).toHaveText("Custom · #123456");
@@ -107,10 +107,10 @@ test("failed library load leaves curated palettes usable and retry keeps keyboar
   await expect(page.locator("#status")).toHaveText("Flower Market applied.");
   await expect(page.locator("#wada-load")).toContainText("Curated palettes are still available");
   await page.getByRole("button", { name: "Retry" }).press("Enter");
-  await expect(page.getByLabel("Search combinations")).toBeFocused();
+  await expect(page.getByLabel("Search palettes")).toBeFocused();
   await expect(page.locator("#wada-load")).toBeEmpty();
-  await page.getByLabel("Search combinations").fill("");
-  await page.getByLabel("Use case").selectOption("Documentation");
+  await page.getByLabel("Search palettes").fill("");
+  await page.getByLabel("Search palettes").fill("Developer Docs");
   await expect(combinations(page).locator(".wada-card")).toHaveCount(1);
   await page.getByRole("button", { name: "Randomize" }).press("Enter");
   await expect(page.locator("#status")).toHaveText("Developer Docs applied.");
@@ -119,7 +119,7 @@ test("failed library load leaves curated palettes usable and retry keeps keyboar
 
 test("Load more and scrolling append pages while keeping keyboard focus", async ({ page }) => {
   await page.goto("/paint/");
-  await page.getByLabel("Era").selectOption("Early Shōwa");
+  await page.getByLabel("Source").selectOption("wada");
   await expect(page.locator("#wada-results-status")).toHaveText("24 of 348 combinations");
   const more = page.getByRole("button", { name: "Load more" });
   await more.focus();
@@ -165,9 +165,11 @@ test("website shows adjusted and added swatches, reports rendered contrast, and 
   await page.goto("/web/");
   await (await find(page, "#1")).click();
   await expect(page.locator("#assignment-count")).toContainText("adjusted or added");
-  await page.getByRole("link", { name: "Check contrast" }).click();
+  await page.getByRole("button", { name: "Check contrast" }).click();
   await expect(page.locator("#canvas-notes")).toContainText("Adjusted from Cerulian Blue");
+  await page.getByRole("tab", { name: "Explore" }).click();
   await (await find(page, "#125")).click();
+  await page.getByRole("tab", { name: "Tune" }).click();
   await expect(page.locator("#canvas-notes")).toContainText("Text on accent #000000 · Added");
   const specimen = page.locator("#specimen");
   for (const theme of ["light", "dark"]) {
@@ -331,4 +333,137 @@ test("pilot pages have working presets, static guidance, clean canonicals and a 
   expect(Array.from(xml.matchAll(/<loc>(.+)<\/loc>/g), (m) => m[1])).toEqual(
     ["/paint/", "/web/", paintPilot, webPilot].map((path) => origin + path),
   );
+});
+
+for (const route of ["paint", "web"]) {
+  test(route + " previews on hover without changing committed data and applies without leaving the workspace", async ({ page }) => {
+    await page.goto("/" + route + "/");
+    const preview = route === "paint" ? fill(page, "wall") : page.locator("#specimen");
+    const property = route === "paint" ? "fill" : "background-color";
+    const colour = () => preview.evaluate((node, property) => getComputedStyle(node).getPropertyValue(property), property);
+    const initial = await colour();
+    const original = await page.evaluate((route) => sessionStorage.getItem("tintfolio-" + route), route);
+    const card = await find(page, "#48");
+    await card.hover();
+    await expect.poll(colour).not.toBe(initial);
+    expect(await page.evaluate((route) => sessionStorage.getItem("tintfolio-" + route), route)).toBe(original);
+    await expect(card).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByRole("button", { name: "Undo palette" })).toBeDisabled();
+    if (route === "web") {
+      await page.getByRole("button", { name: "Export theme" }).press("Enter");
+      await expect(page.getByLabel("Output")).toHaveValue(new RegExp("--background: " + JSON.parse(original!).colours.background));
+      await close(page);
+    }
+    await page.locator("h1").hover();
+    await expect.poll(colour).toBe(initial);
+    await card.click();
+    await expect(card).toHaveAttribute("aria-pressed", "true");
+    await page.locator("h1").hover();
+    await expect.poll(colour).not.toBe(initial);
+    for (const selector of ["#picture", "#role-strip"]) {
+      await expect(page.locator(selector)).toBeInViewport({ ratio: 1 });
+    }
+    const next = await find(page, route === "paint" ? "Clay & chalk" : "Developer Docs");
+    const committed = await colour();
+    await next.hover();
+    await expect.poll(colour).not.toBe(committed);
+    await page.getByRole("button", { name: "Undo palette" }).click();
+    await expect.poll(colour).toBe(initial);
+  });
+}
+
+test("Paint locks the exact wall HEX in hover and apply, and workspace shortcuts preserve field keys", async ({ page }) => {
+  await page.goto("/paint/");
+  await page.locator('[data-surface="ceiling"]').click({ position: { x: 280, y: 8 } });
+  await expect(page.getByRole("tab", { name: "Tune" })).toHaveAttribute("aria-selected", "true");
+  const hex = page.locator("#hex");
+  await hex.fill("#123456");
+  await page.getByRole("button", { name: "Lock Main wall" }).click();
+  await page.getByRole("tab", { name: "Explore" }).click();
+  await page.getByLabel("Source").selectOption("wada");
+  await page.getByLabel("Swatch count").selectOption("2");
+  await expect(page.locator("#wada-results-status")).toHaveText(/of \d+ combinations/);
+  const search = page.getByLabel("Search palettes");
+  await search.press("s");
+  await search.press("Space");
+  await search.press("ArrowLeft");
+  await expect(search).toHaveValue("s ");
+  await expect(page.getByRole("button", { name: "Undo palette" })).toBeDisabled();
+  await search.fill("");
+  const cards = page.locator(".wada-card");
+  await cards.first().hover();
+  await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#123456"));
+  await page.locator("h1").hover();
+  const studio = page.locator("#studio");
+  await studio.press("ArrowRight");
+  await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#123456"));
+  await studio.press("ArrowRight");
+  await expect(cards.nth(1)).toHaveAttribute("aria-pressed", "true");
+  await studio.press("ArrowLeft");
+  await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
+  await studio.press("Space");
+  await expect(cards.first()).toHaveAttribute("aria-pressed", "false");
+  await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#123456"));
+  const swap = page.getByRole("button", { name: "Swap roles" });
+  await expect(swap).toBeDisabled();
+  await studio.press("s");
+  await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#123456"));
+  await page.getByRole("button", { name: "Lock Main wall" }).click();
+  await expect(swap).toBeEnabled();
+  const ceiling = await fill(page, "ceiling").evaluate((node) => getComputedStyle(node).fill);
+  await studio.press("s");
+  await expect(fill(page, "wall")).toHaveCSS("fill", ceiling);
+  await page.getByRole("button", { name: "Undo palette" }).click();
+  await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#123456"));
+  await fill(page, "ceiling").click({ position: { x: 280, y: 8 } });
+  await expect(page.getByRole("button", { name: "Tune Ceiling" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("Suggestions", { exact: true })).toBeVisible();
+  const before = await hex.inputValue();
+  await page.getByRole("slider", { name: "Lightness" }).press("ArrowLeft");
+  await expect(hex).not.toHaveValue(before);
+});
+
+test("Website preserves a locked accent in site mode when applying a pair and tunes canvas roles", async ({ page }) => {
+  await page.goto("/web/?mode=site&background=F3EADF&text=492E46&accent=35615E&onAccent=FFFFFF");
+  await page.getByRole("button", { name: "Tune Accent", exact: true }).click();
+  await expect(page.locator("#hex")).toHaveValue("#35615E");
+  await page.locator("#specimen-button span").click();
+  await expect(page.getByRole("button", { name: "Tune Text on accent" })).toBeFocused();
+  await expect(page.locator("#hex")).toHaveValue("#FFFFFF");
+  await page.getByRole("button", { name: "Lock Accent", exact: true }).click();
+  await page.getByRole("tab", { name: "Explore" }).click();
+  const card = await find(page, "Paper & ink");
+  await card.hover();
+  await expect(page.locator("#specimen-button")).toHaveCSS("background-color", rgb("#35615E"));
+  await card.press("Space");
+  await expect(page.locator("#specimen-button")).toHaveCSS("background-color", rgb("#35615E"));
+  await expect(page.getByRole("button", { name: "Lock Accent", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const url = new URL(await share(page));
+  expect(url.searchParams.get("mode")).toBe("site");
+  expect(url.searchParams.get("accent")).toBe("35615E");
+  await page.getByRole("heading", { name: "Workspace", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Tune Primary Text" })).toBeFocused();
+  const hex = page.locator("#hex");
+  await expect(hex).toHaveValue("#353C30");
+  await page.getByRole("slider", { name: "Warmth" }).press("ArrowRight");
+  await expect(hex).not.toHaveValue("#353C30");
+  await page.getByRole("button", { name: "Lock Background" }).click();
+  await expect(page.getByRole("button", { name: "Swap roles" })).toBeDisabled();
+});
+
+test("Explore filters curated tags and source contrast independently of automatic correction", async ({ page }) => {
+  await page.goto("/web/");
+  const style = page.getByLabel("Style");
+  await style.selectOption("bold");
+  await expect(page.locator(".wada-card").getByText("The Ginkgo")).toBeVisible();
+  await style.selectOption("warm");
+  await expect(page.locator(".wada-card").getByText("Chocolate & Blues")).toBeVisible();
+  await expect(page.locator(".wada-card").getByText("The Ginkgo")).toHaveCount(0);
+  await page.getByLabel("Swatch count").selectOption("2");
+  await style.selectOption("contrast");
+  await expect(page.locator(".wada-card").getByText("Paper & ink")).toBeVisible();
+  await expect(page.locator(".wada-card").getByText("Nordic Limewash")).toHaveCount(0);
+  await page.getByLabel("Source").selectOption("wada");
+  await expect(page.locator(".wada-card").getByText("Paper & ink")).toHaveCount(0);
 });

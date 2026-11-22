@@ -15,7 +15,7 @@ export interface Combination {
   swatches: Swatch[];
   note?: string;
   starter?: number;
-  tags?: { mood?: string; era?: string; use?: string[] };
+  tags?: { mood?: string; era?: string; use?: string[]; warmNeutral?: boolean };
 }
 export interface Assignment {
   role: Role;
@@ -81,7 +81,7 @@ function* orders(swatches: Swatch[]): Generator<Swatch[]> {
   }
 }
 
-export function assignWeb(swatches: Swatch[]): Assignment[] {
+function webOrder(swatches: Swatch[]) {
   let [background, text, accent, buttonText] = swatches;
   let fewestChanges = Infinity;
   let lightestBackground = 0;
@@ -103,6 +103,16 @@ export function assignWeb(swatches: Swatch[]): Assignment[] {
     }
   }
 
+  return [background, text, accent, buttonText];
+}
+
+export function hasSourceContrast({ swatches, starter }: Combination) {
+  const [background, text] = starter === undefined ? webOrder(swatches) : swatches;
+  return passes(contrast(text.hex, background.hex));
+}
+
+export function assignWeb(swatches: Swatch[]): Assignment[] {
+  const [background, text, accent, buttonText] = webOrder(swatches);
   const assignments: Assignment[] = [
     { role: "background", hex: background.hex.toUpperCase(), source: background },
     {

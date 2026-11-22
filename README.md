@@ -1,5 +1,7 @@
 # Tintfolio
 
+[Open Tintfolio](https://tintfolio.bury-thomas.workers.dev/)
+
 Tintfolio is a static colour explorer with two editors. **Wall paint** opens at `/paint/` with an illustrated sage living room. Try one paint across the walls and ceiling or assign a second colour to the ceiling or feature wall. **Website colours** opens at `/web/` with a sample dashboard. Try a colour pair or edit a full site palette and check its contrast in light and dark previews. The root page opens Wall paint.
 
 ## Run locally

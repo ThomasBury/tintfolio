@@ -1,37 +1,36 @@
 # Tintfolio
 
-Tintfolio is a static colour explorer with two editors. **Wall paint** opens at `/paint/` with a sage living room. Try a second colour on the ceiling or the feature wall, then switch to the bedroom or kitchen to see the same paints in another setting. **Website colours** opens at `/web/` with an editorial text pair. Expand it to a site palette to edit a button and its label. The root page opens Wall paint.
+Tintfolio is a static colour explorer with two editors. **Wall paint** opens at `/paint/` with a sage living room. Single colour drenches the walls and ceiling in one paint. Try Colour pair to use a second colour on the ceiling or the feature wall. Switch rooms to see the same paints in another setting, and use Existing floor (optional) to match the colour of your floor in the preview. **Website colours** opens at `/web/` with an editorial text pair. Expand it to a site palette to edit a button and its label. The root page opens Wall paint.
 
 ## Run locally
 
-Use Node 24 and npm. The application uses Vite, vanilla TypeScript and Culori. It serves its own fonts and runs entirely in the browser.
+Use Node 24, npm and [Just](https://just.systems/man/en/). The application uses Vite, vanilla TypeScript and Culori. It serves its own fonts and runs entirely in the browser.
 
 ```sh
-npm ci
-npm run dev
+just install
+just serve
 ```
 
-Open the local URL Vite prints. Each editor keeps its last valid design for the browser tab’s session. Share copies a link that opens the active colours and mode, including the selected room and surfaces for paint. A shared design takes precedence over an earlier session. Both editors export labelled SVG swatches. The website editor also copies CSS custom properties.
+Open the local URL Vite prints. Run `just` to list commands or `just serve 5174` to choose a different port.
+
+Each editor keeps its last valid design for the browser tab’s session. Share copies a link that opens the active colours and mode, including the room, surfaces and any floor colour you chose. A shared design takes precedence over an earlier session. Both editors export labelled SVG swatches of the palette colours. The website editor also copies CSS custom properties.
 
 ## Verify a release
 
 ```sh
-npm run typecheck
-npm test
-npm run build
-npx playwright install chromium
-npm run test:browser
+just install-browser
+just check
 ```
 
-The browser suite starts a local server for `dist/` on port 4173. On Linux CI, use `npx playwright install --with-deps chromium` to also install the required system libraries. To use an installed Google Chrome, run `PW_CHANNEL=chrome npm run test:browser`. GitHub Actions runs the type check, unit tests, production build and browser journeys on pushes and pull requests.
+Run `just lint`, `just test`, `just build` or `just test-browser` individually. Lint checks TypeScript, unused code and whitespace errors in Git diffs. The browser suite serves `dist/` on port 4173. On Linux CI, use `npx playwright install --with-deps chromium` to also install the required system libraries. To use installed Google Chrome, run `PW_CHANNEL=chrome just test-browser`. GitHub Actions runs the type check, unit tests, production build and browser journeys on pushes and pull requests.
 
 To browse the production build or measure it, start the preview server.
 
 ```sh
-npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
+just preview
 ```
 
-With the preview server running, execute `npm run measure` in another terminal. Lighthouse uses an installed Chrome or Chromium. Set `CHROME_PATH` to the browser executable if discovery needs a hint.
+With the preview server running, execute `just measure` in another terminal. Lighthouse uses an installed Chrome or Chromium. Set `CHROME_PATH` to the browser executable if discovery needs a hint. `just clean` removes generated build and browser test output.
 
 ## How colours are checked
 
@@ -40,6 +39,8 @@ Paint suggestions adjust OKLCH lightness and chroma. Low-chroma paints produce n
 Website contrast uses the final sRGB HEX colours and a 4.5:1 minimum for both text pairs. The displayed ratio is rounded to two decimals. Pass or fail uses the full precision result. The regression fixture `#777773` on white displays 4.50:1 and still needs adjustment. A proposed text correction is checked again after conversion to HEX. [W3C contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
 
 The six starting palettes and their design rationales live in [src/examples.json](src/examples.json).
+
+Both editors load the Sanzo Wada collection when you open it. The bundled data keeps the upstream swatch names, HEX values and swatch order from revision `c142bd0bc8049ea48db4da5eb397981f047e8ef4`. Its swatch table stores each name and HEX once. Each combination row starts with the combination number and lists zero-based indices into that table in upstream order. [Pinned dataset and conversion notes](https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4) · [MIT notice](public/wada-license.txt)
 
 ## Mobile walkthrough
 
@@ -55,8 +56,8 @@ Local production build, 22 November 2026, Lighthouse 13.6.0 and headless Chrome 
 
 | Route | Three cold LCP runs (ms) | Median LCP | Initial JS, gzip |
 | --- | --- | ---: | ---: |
-| `/paint/` | 1,508 · 1,657 · 1,668 | 1,657 ms | 25,072 bytes |
-| `/web/` | 1,422 · 1,451 · 1,608 | 1,451 ms | 25,072 bytes |
+| `/paint/` | 1,741 · 1,850 · 1,957 | 1,850 ms | 28,130 bytes |
+| `/web/` | 764 · 1,506 · 1,641 | 1,506 ms | 28,130 bytes |
 
 ## Deploy with Cloudflare Pages
 
@@ -71,3 +72,11 @@ Connect the Git repository to a Cloudflare Pages project and use these build set
 | Node version | Set `NODE_VERSION` to `24` |
 
 Pages supplies `CF_PAGES_URL` during its build. Tintfolio uses it to give social crawlers absolute URLs for the two route-specific preview images. The output contains ordinary HTML entry points for both editors, so shared URLs work without a catch-all rewrite. [Cloudflare Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/)
+
+For a manual upload to an existing Pages project, make Wrangler available on your PATH and authenticate with `wrangler login`. Pass the project name, branch and public URL.
+
+```sh
+just deploy my-pages-site preview https://preview.my-pages-site.pages.dev
+```
+
+The recipe rebuilds `dist/` with the supplied URL for social images, then uploads it. Use your configured production branch and public URL to publish to production. [Wrangler Pages deploy](https://developers.cloudflare.com/workers/wrangler/commands/pages/#pages-deploy)

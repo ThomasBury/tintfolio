@@ -1,6 +1,7 @@
 import "./style.css";
 import {
   catalogue,
+  defaultFloor,
   editable,
   example,
   hex,
@@ -10,6 +11,7 @@ import {
   save,
   shareParams,
   startDesign,
+  type Design,
   type Pair,
   type Role,
   type Room,
@@ -19,6 +21,7 @@ import { contrast, correction, passes, suggestions } from "./colour.ts";
 import { sheet, css } from "./export.ts";
 import { icon } from "./icons.ts";
 import { room } from "./room.ts";
+import { mountCollection } from "./collection.ts";
 
 const tool = document.body.dataset.tool as Tool;
 const paint = tool === "paint";
@@ -34,9 +37,20 @@ const note =
   "Check a paint sample in your room. Light, finish and texture change how it looks.";
 const label = (r: Role) =>
   r === "wall" && d.mode === "single" ? "Walls" : labels[r];
+const editLabel = (r: Role) =>
+  r === "wall" && d.mode === "single" ? "Walls &amp; ceiling" : labels[r];
 function persist() {
   save(tool, d);
   if (location.search) history.replaceState(null, "", location.pathname);
+}
+function applyDesign(design: Design, announcement: string, focusEditor = false) {
+  d = design;
+  role = editable(d)[0];
+  undo = null;
+  persist();
+  render();
+  if (focusEditor) el("mode-" + d.mode).focus();
+  el("status").textContent = announcement;
 }
 function preview() {
   if (paint) return room(d);
@@ -60,7 +74,7 @@ function strip() {
   return editable(d)
     .map(
       (r) =>
-        `<button id="role-${r}" data-role="${r}" class="tile" aria-pressed="${role === r}"><i style="--swatch:${d.colours[r]}"></i><span>${label(r)}</span>${role === r ? icon("check") : ""}</button>`,
+        `<button id="role-${r}" data-role="${r}" class="tile" aria-pressed="${role === r}"><i style="--swatch:${d.colours[r]}"></i><span>${editLabel(r)}</span>${role === r ? icon("check") : ""}</button>`,
     )
     .join("");
 }
@@ -98,6 +112,9 @@ function key() {
     .map(([r, v]) => `<span>${chip(v)}${label(r)}</span>`)
     .join("");
 }
+function floorControl() {
+  return `<div class="floor-control"><label><span>Existing floor <small>(optional)</small></span><span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button id="reset-floor" class="outline" ${d.floor ? "" : "disabled"}>Reset floor</button></div>`;
+}
 function render(focus?: string) {
   el("studio").innerHTML =
     `<section class="preview-card" aria-labelledby="preview-title"><div class="preview-head"><div class="section-heading">${icon(paint ? "room" : "web")}<h2 id="preview-title">${paint ? "Room preview" : "Page preview"}</h2></div>
@@ -110,12 +127,13 @@ function render(focus?: string) {
           )
           .join("")}</select>`
       : ""
-  }</div><div id="picture">${preview()}</div><div id="key">${key()}</div></section>
+  }</div><div id="picture">${preview()}</div><div id="key">${key()}</div>${paint ? floorControl() : ""}</section>
   <aside class="control-card" aria-label="Colour controls">${modes()}<div class="editing"><div class="eyebrow">Palette colours</div><div id="role-strip" role="group" aria-label="Select a colour to edit" tabindex="-1">${strip()}</div>
-  <label class="field-label" for="hex">${label(role)} <span>HEX</span></label><div class="field-row"><label class="picker" title="Pick ${label(role)} colour"><input id="picker" type="color" value="${d.colours[role]}" aria-label="Pick ${label(role)} colour"></label>
+  <label class="field-label" for="hex">${editLabel(role)} <span>HEX</span></label><div class="field-row"><label class="picker" title="Pick ${editLabel(role)} colour"><input id="picker" type="color" value="${d.colours[role]}" aria-label="Pick ${editLabel(role)} colour"></label>
   <input id="hex" spellcheck="false" autocomplete="off" autocapitalize="characters" aria-describedby="feedback" value="${d.colours[role]}"><button id="copy" class="outline">${icon("copy")}Copy</button></div><p id="feedback" role="status"></p><div id="advice">${advice()}</div></div>
   <div class="actions">${paint ? "" : '<button id="css" class="outline">Copy CSS</button>'}<button id="share" class="solid">${icon("share")}Share</button><button id="download" class="outline">${icon("download")}Download palette SVG</button></div></aside>
-  ${paint ? `<p class="sample">${icon("info")}${note}</p>` : ""}<p class="sr" id="status" role="status"></p>`;
+  ${paint ? `<p class="sample">${icon("info")}${note}</p>` : ""}`;
+  collection.setTarget(d.pair);
   if (focus) el(focus)?.focus({ preventScroll: true });
 }
 function updateColour(value: string, typing = false) {
@@ -133,6 +151,12 @@ function updateColour(value: string, typing = false) {
   if (!typing) el<HTMLInputElement>("hex").value = value;
   el("feedback").textContent = "";
   el("hex").removeAttribute("aria-invalid");
+}
+function updateFloor(value: string) {
+  d.floor = value === defaultFloor ? undefined : value;
+  el("picture").querySelector("svg")!.style.setProperty("--floor", value);
+  el<HTMLButtonElement>("reset-floor").disabled = !d.floor;
+  persist();
 }
 function validate() {
   if (hex(el<HTMLInputElement>("hex").value)) return;
@@ -164,13 +188,8 @@ document.addEventListener("click", (e) => {
   const b = (e.target as Element).closest("button");
   if (!b) return;
   if (b.dataset.example !== undefined) {
-    d = example(tool, Number(b.dataset.example), d.room);
-    role = editable(d)[0];
-    undo = null;
-    persist();
-    render();
-    el("status").textContent =
-      catalogue[tool][Number(b.dataset.example)].name + " applied.";
+    const index = Number(b.dataset.example);
+    applyDesign({ ...example(tool, index, d.room), floor: d.floor }, catalogue[tool][index].name + " applied.");
     return;
   }
   if (b.dataset.mode) {
@@ -201,6 +220,10 @@ document.addEventListener("click", (e) => {
     persist();
     render("role-" + role);
     el("status").textContent = label(role) + " restored.";
+  } else if (b.id === "reset-floor") {
+    el<HTMLInputElement>("floor").value = defaultFloor;
+    updateFloor(defaultFloor);
+    el("floor").focus();
   } else if (b.id === "copy") void copy(d.colours[role], b, "HEX copied.");
   else if (b.id === "css") void copy(css(d), b, "CSS copied.");
   else if (b.id === "share")
@@ -242,6 +265,10 @@ document.addEventListener("change", (e) => {
 });
 document.addEventListener("input", (e) => {
   const input = e.target as HTMLInputElement;
+  if (input.id === "floor") {
+    const value = hex(input.value);
+    if (value) updateFloor(value);
+  }
   if (input.id === "hex" || input.id === "picker") {
     const value = hex(input.value);
     if (value) updateColour(value, input.id === "hex");
@@ -288,5 +315,12 @@ if (initial.notice) {
   el("notice").hidden = false;
   el("notice").textContent = initial.notice;
 }
+el("studio").insertAdjacentHTML("afterend", '<p class="sr" id="status" role="status"></p>');
+const collection = mountCollection(el("examples").parentElement!, tool, d.pair, (id, assignments) => {
+  const mode = paint ? "pair" : assignments.length === 2 ? "text" : "site";
+  const colours = { ...d.colours };
+  for (const { role, hex } of assignments) colours[role] = hex;
+  applyDesign({ ...d, mode, colours }, `Sanzo Wada combination #${id} applied.`, true);
+});
 save(tool, d);
 render();

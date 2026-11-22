@@ -30,6 +30,7 @@ test("reject incomplete colours, invalid rooms, duplicate and inactive roles", (
     "mode=text&background=ffffxx&text=000000",
     "mode=text&background=ffffff&text=123456&text=ffffff",
     "mode=text&background=ffffff&text=000000&accent=000000",
+    "mode=text&background=ffffff&text=000000&floor=d2b18c",
   ])
     assert.equal(decode("web", new URLSearchParams(search)), null);
   assert.equal(
@@ -42,7 +43,17 @@ test("reject incomplete colours, invalid rooms, duplicate and inactive roles", (
   assert.equal(hex("#ABC"), null);
   assert.equal(hex("a9b39e"), "#A9B39E");
 });
-test("exports declare active roles including fixed paint neutrals", () => {
+test("paint links accept one optional existing floor colour", () => {
+  const base = "mode=single&room=living&wall=a9b39e";
+  assert.equal(decode("paint", new URLSearchParams(base))?.floor, undefined);
+  const design = decode("paint", new URLSearchParams(base + "&floor=102030"));
+  assert.equal(design?.floor, "#102030");
+  assert.equal(shareParams("paint", design!).get("floor"), "102030");
+  for (const floor of ["", "ABC", "102030&floor=405060"]) {
+    assert.equal(decode("paint", new URLSearchParams(base + "&floor=" + floor)), null);
+  }
+});
+test("exports declare active roles including the paint ceiling and trim", () => {
   assert.equal(
     css(example("web")),
     ":root {\n  --background: #F3EEDF;\n  --text: #353C30;\n}",

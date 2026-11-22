@@ -20,11 +20,13 @@ export const rooms = {
   kitchen: "Kitchen",
 } as const;
 export const neutral = { ceiling: "#F5F0E6", trim: "#EBE4D7" };
+export const defaultFloor = "#D2B18C";
 export interface Design {
   mode: string;
   room: Room;
   pair: Pair;
   colours: Record<Role, string>;
+  floor?: string;
 }
 export const catalogue = examples;
 export function example(tool: Tool, index = 0, room: Room = "living"): Design {
@@ -57,11 +59,15 @@ export function editable(d: Design): Role[] {
       return ["background", "text"];
   }
 }
+export function ceilingColour(d: Design) {
+  if (d.mode === "single") return d.colours.wall;
+  return d.pair === "ceiling" ? d.colours.ceiling : neutral.ceiling;
+}
 export function palette(d: Design): [Role, string][] {
   const entries: [Role, string][] = editable(d).map((r) => [r, d.colours[r]]);
   if (d.mode === "single" || d.mode === "pair") {
     if (!entries.some(([r]) => r === "ceiling"))
-      entries.push(["ceiling", neutral.ceiling]);
+      entries.push(["ceiling", ceilingColour(d)]);
     entries.push(["trim", neutral.trim]);
   }
   return entries;
@@ -76,6 +82,7 @@ export function shareParams(tool: Tool, d: Design) {
   if (tool === "paint") {
     p.set("room", d.room);
     if (d.mode === "pair") p.set("pair", d.pair);
+    if (d.floor) p.set("floor", d.floor.slice(1));
   }
   for (const r of editable(d)) p.set(r, d.colours[r].slice(1));
   return p;
@@ -96,6 +103,11 @@ export function decode(tool: Tool, p: URLSearchParams): Design | null {
       const pair = p.get("pair");
       if (pair !== "ceiling" && pair !== "feature") return null;
       d.pair = pair;
+    }
+    if (p.has("floor")) {
+      const floor = hex(p.get("floor") || "");
+      if (!floor) return null;
+      d.floor = floor;
     }
   }
   for (const r of editable(d)) {

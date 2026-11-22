@@ -78,3 +78,49 @@ for (const paint of [true, false]) {
     },
   );
 }
+
+test("paint floor controls and painted floor are reachable on mobile", async ({ page }) => {
+  await page.goto("/paint/");
+  const picker = page.getByLabel("Existing floor (optional)");
+  const reset = page.getByRole("button", { name: "Reset floor" });
+  const floor = page.locator("[data-surface=floor]");
+  for (const width of [320, 600]) {
+    await page.setViewportSize({ width, height: 640 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    await onScreen(picker);
+    await picker.fill("#57616b");
+    await expect(floor).toHaveCSS("fill", "rgb(87, 97, 107)");
+    expect(await floor.evaluate((surface) => {
+      const svg = surface.ownerSVGElement!;
+      const point = new DOMPoint(450, 421).matrixTransform(svg.getScreenCTM()!);
+      return document.elementFromPoint(point.x, point.y) === surface;
+    })).toBe(true);
+    await onScreen(reset);
+    await reset.tap();
+    await expect(floor).toHaveCSS("fill", "rgb(210, 177, 140)");
+  }
+});
+
+for (const route of ["paint", "web"]) {
+  test(route + " collection has reachable controls at 320 pixels", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto("/" + route + "/");
+    const collection = page.locator("#wada");
+    await collection.locator("summary").tap();
+    await collection.locator("#wada-featured").getByRole("button", { name: /#344/ }).tap();
+    const preview = collection.locator("#wada-preview");
+    const apply = preview.getByRole("button", { name: "Apply", exact: true });
+    await expect(preview).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+    for (const target of await collection.locator("summary, button:visible, select, input").all()) {
+      const box = await target.boundingBox();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+      await expect(target).toHaveAccessibleName(/.+/);
+    }
+    await apply.scrollIntoViewIfNeeded();
+    await onScreen(apply);
+    await apply.tap();
+    await onScreen(page.locator(route === "paint" ? "#mode-pair" : "#mode-site"));
+  });
+}

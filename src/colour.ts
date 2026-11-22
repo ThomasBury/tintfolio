@@ -42,16 +42,22 @@ export function suggestions(
   }
   return result;
 }
+export function neutralText(bg: string) {
+  return contrast("#000000", bg) >= contrast("#FFFFFF", bg)
+    ? "#000000"
+    : "#FFFFFF";
+}
 export function correction(fg: string, bg: string): string | null {
   if (passes(contrast(fg, bg))) return null;
   const base = oklch(fg)!;
-  const dark = contrast("#000000", bg) >= contrast("#FFFFFF", bg);
+  const neutral = neutralText(bg);
+  const target = neutral === "#000000" ? 0 : 1;
   for (let i = 1; i <= 20; i++) {
     const value = toHex({
       ...base,
-      l: base.l + (((dark ? 0 : 1) - base.l) * i) / 20,
+      l: base.l + ((target - base.l) * i) / 20,
     });
     if (passes(contrast(value, bg))) return value;
   }
-  return dark ? "#000000" : "#FFFFFF";
+  return neutral;
 }

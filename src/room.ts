@@ -1,4 +1,4 @@
-import { neutral, rooms, type Design } from "./design.ts";
+import { ceilingColour, defaultFloor, neutral, rooms, type Design } from "./design.ts";
 
 const defs = `<defs>
   <linearGradient id="day"><stop stop-color="#fff5d5" stop-opacity=".20"/><stop offset=".65" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#3a3529" stop-opacity=".12"/></linearGradient>
@@ -20,8 +20,8 @@ const shell = `<path data-surface="ceiling" fill="var(--ceiling)" d="M0 0h840l-1
   <path fill="#25291e" opacity=".12" d="M0 0l106 49v241L0 364z"/>
   <path fill="#fffae8" opacity=".16" d="M739 49L840 0v364l-101-74z"/>
   <path pointer-events="none" fill="url(#day)" d="M0 0h840v364l-101-74H106L0 364z"/>
-  <path fill="#d2b18c" d="M0 364l106-74h633l101 74v66H0z"/>
-  <g fill="none" stroke="#a6805f" opacity=".45"><path d="M0 389l210-99M87 430l199-140m-50 140l114-140m36 140l39-140m126 140l-58-140m219 140L557 290m283 119L623 290m217 71l-150-71M72 314h694M36 343h775M0 380h840"/></g>
+  <path data-surface="floor" fill="var(--floor)" d="M0 364l106-74h633l101 74v66H0z"/>
+  <g fill="none" stroke="#000" opacity=".18"><path d="M0 389l210-99M87 430l199-140m-50 140l114-140m36 140l39-140m126 140l-58-140m219 140L557 290m283 119L623 290m217 71l-150-71M72 314h694M36 343h775M0 380h840"/></g>
   <path fill="var(--trim)" d="M0 350l106-70h633l101 70v13l-101-73H106L0 365z"/>
   <path fill="#776953" opacity=".23" d="M0 363l106-74h633l101 73v3l-101-73H106L0 367z"/>
   <g transform="matrix(1 .46 0 1 12 40)"><rect width="76" height="210" fill="#e9e2d0"/><rect x="6" y="6" width="64" height="195" fill="url(#glass)"/><path d="M6 160q18-38 33-8q18-54 31-26v74H6" fill="#adb69a"/><path d="M6 176q15-34 36-12q13-25 28-24v61H6" fill="#8f9e85"/><path d="M38 5v197M4 107h68" stroke="#ece7d6" stroke-width="5"/><path d="M-3 209h83v6H-3" fill="#f1eadb"/></g>
@@ -77,9 +77,5 @@ export function room(d: Design) {
     d.mode === "pair" && d.pair === "feature"
       ? d.colours.feature
       : d.colours.wall;
-  const ceiling =
-    d.mode === "pair" && d.pair === "ceiling"
-      ? d.colours.ceiling
-      : neutral.ceiling;
-  return `<svg id="room" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 430" preserveAspectRatio="xMidYMin slice" role="img" aria-label="${rooms[d.room]} paint preview" style="--wall:${d.colours.wall};--feature:${feature};--ceiling:${ceiling};--trim:${neutral.trim}">${defs}${shell}${furnishings[d.room]}</svg>`;
+  return `<svg id="room" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 430" role="img" aria-label="${rooms[d.room]} paint preview" style="--wall:${d.colours.wall};--feature:${feature};--ceiling:${ceilingColour(d)};--trim:${neutral.trim};--floor:${d.floor ?? defaultFloor}">${defs}${shell}${furnishings[d.room]}</svg>`;
 }

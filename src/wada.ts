@@ -1,0 +1,121 @@
+import { contrast, correction, neutralText, passes } from "./colour.ts";
+import type { Role } from "./design.ts";
+
+interface CollectionData {
+  swatches: [name: string, hex: string][];
+  combinations: [id: number, ...swatches: number[]][];
+}
+export interface Swatch {
+  name: string;
+  hex: string;
+}
+export interface Combination {
+  id: number;
+  swatches: Swatch[];
+}
+export interface Assignment {
+  role: Role;
+  hex: string;
+  source?: Swatch;
+}
+
+export function unpackCollection(data: CollectionData): Combination[] {
+  const swatches = data.swatches.map(([name, hex]) => {
+    if (typeof name !== "string" || typeof hex !== "string" || !/^#[0-9a-f]{6}$/i.test(hex))
+      throw new Error("Invalid collection swatch");
+    return { name, hex };
+  });
+  if (data.combinations.length !== 348)
+    throw new Error("Incomplete collection");
+  return data.combinations.map(([id, ...indices], position) => {
+    if (
+      id !== position + 1 ||
+      indices.length < 2 ||
+      indices.length > 4 ||
+      indices.some((index) => !Number.isInteger(index) || !swatches[index])
+    )
+      throw new Error("Invalid collection combination");
+    return { id, swatches: indices.map((index) => swatches[index]) };
+  });
+}
+
+export function matchingCombinations(
+  collection: Combination[],
+  count: number,
+  query: string,
+) {
+  const term = query.trim().toLowerCase();
+  const byId = /^#?\s*[0-9]+$/.test(term);
+  return collection.filter(
+    ({ id, swatches }) =>
+      (!count || swatches.length === count) &&
+      (byId
+        ? id === Number(term.replace("#", ""))
+        : swatches.some(({ name }) => name.toLowerCase().includes(term))),
+  );
+}
+
+export function randomCombination(matches: Combination[], current?: number): Combination | undefined {
+  if (!matches.length) return;
+  const eligible = matches.length > 1
+    ? matches.filter(({ id }) => id !== current)
+    : matches;
+  return eligible[Math.floor(Math.random() * eligible.length)];
+}
+
+function* orders(swatches: Swatch[]): Generator<Swatch[]> {
+  if (!swatches.length) {
+    yield [];
+    return;
+  }
+  for (const [i, swatch] of swatches.entries()) {
+    for (const rest of orders(swatches.filter((_, j) => i !== j))) {
+      yield [swatch, ...rest];
+    }
+  }
+}
+
+export function assignWeb(swatches: Swatch[]): Assignment[] {
+  let [background, text, accent, buttonText] = swatches;
+  let fewestChanges = Infinity;
+  let lightestBackground = 0;
+
+  // Iterate in source order so the first assignment wins any remaining tie.
+  for (const [bg, fg, button, label] of orders(swatches)) {
+    const changes =
+      Number(!passes(contrast(fg.hex, bg.hex))) +
+      Number(label !== undefined && !passes(contrast(label.hex, button.hex)));
+    // Relative luminance increases with contrast against black.
+    const lightness = contrast(bg.hex, "#000000");
+    if (
+      changes < fewestChanges ||
+      (changes === fewestChanges && lightness > lightestBackground)
+    ) {
+      [background, text, accent, buttonText] = [bg, fg, button, label];
+      fewestChanges = changes;
+      lightestBackground = lightness;
+    }
+  }
+
+  const assignments: Assignment[] = [
+    { role: "background", hex: background.hex.toUpperCase(), source: background },
+    {
+      role: "text",
+      hex: correction(text.hex, background.hex) ?? text.hex.toUpperCase(),
+      source: text,
+    },
+  ];
+  if (accent) {
+    assignments.push(
+      { role: "accent", hex: accent.hex.toUpperCase(), source: accent },
+      {
+        role: "onAccent",
+        hex: buttonText
+          ? correction(buttonText.hex, accent.hex) ?? buttonText.hex.toUpperCase()
+          : neutralText(accent.hex),
+        source: buttonText,
+      },
+    );
+  }
+  return assignments;
+}

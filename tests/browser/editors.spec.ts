@@ -40,6 +40,67 @@ async function checkedStyles(page: Page) {
 }
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+test("single colour applies one paint to all walls and the ceiling", async ({ page }) => {
+  await page.goto("/paint/");
+  const single = page.getByRole("button", { name: "Single colour" });
+  const ceiling = page.locator("[data-surface=ceiling]");
+  await expect(ceiling).toHaveCSS("fill", "rgb(169, 179, 158)");
+  await page.getByRole("button", { name: "Colour pair" }).click();
+  await page.getByRole("button", { name: "Ceiling", exact: true }).click();
+  await page.locator("#hex").fill("#E4D0BC");
+  await expect(ceiling).toHaveCSS("fill", "rgb(228, 208, 188)");
+  await single.click();
+  await expect(single).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Walls & ceiling" }).click();
+  await page.locator("#picker").fill("#3c5064");
+  await expect(page.locator("#hex")).toHaveValue("#3C5064");
+  const paints = (await checkedStyles(page)).filter(([role]) => role !== "floor");
+  expect(paints).toHaveLength(4);
+  expect(paints.every(([, fill]) => fill === "rgb(60, 80, 100)")).toBe(true);
+  await exported(page, { "Main wall": "#3C5064", Ceiling: "#3C5064", Trim: "#EBE4D7" });
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(ceiling).toHaveCSS("fill", "rgb(169, 179, 158)");
+  await page.getByRole("button", { name: "Colour pair" }).click();
+  await expect(ceiling).toHaveCSS("fill", "rgb(228, 208, 188)");
+});
+
+test("existing floor stays independent of paint palettes", async ({ page, browser }) => {
+  await page.goto("/paint/");
+  const picker = page.getByLabel("Existing floor (optional)");
+  const reset = page.getByRole("button", { name: "Reset floor" });
+  const floor = page.locator("[data-surface=floor]");
+  await expect(reset).toBeDisabled();
+  const before = await checkedStyles(page);
+  await picker.fill("#57616b");
+  await expect(floor).toHaveCSS("fill", "rgb(87, 97, 107)");
+  expect((await checkedStyles(page)).filter(([role]) => role !== "floor")).toEqual(
+    before.filter(([role]) => role !== "floor"),
+  );
+  await expect(page.getByText("Suggestions", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Room", { exact: true }).selectOption("kitchen");
+  await page.getByRole("button", { name: "Apply Clay & chalk palette" }).click();
+  await page.getByRole("button", { name: "Single colour" }).click();
+  await page.reload();
+  await expect(picker).toHaveValue("#57616b");
+  await expect(floor).toHaveCSS("fill", "rgb(87, 97, 107)");
+  await exported(page, { "Main wall": "#C78E76", Ceiling: "#C78E76", Trim: "#EBE4D7" });
+
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  const shared = await clipboard(page);
+  const fresh = await browser.newContext();
+  const reopened = await fresh.newPage();
+  await reopened.goto(shared);
+  await expect(reopened.getByLabel("Existing floor (optional)")).toHaveValue("#57616b");
+  await expect(reopened.locator("[data-surface=floor]")).toHaveCSS("fill", "rgb(87, 97, 107)");
+  await fresh.close();
+
+  await reset.click();
+  await expect(picker).toBeFocused();
+  await expect(floor).toHaveCSS("fill", "rgb(210, 177, 140)");
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  expect(new URL(await clipboard(page)).searchParams.has("floor")).toBe(false);
+});
+
 test("paint surfaces, storage, shared links and standalone swatches", async ({
   page,
   browser,
@@ -260,3 +321,167 @@ for (const route of ["paint", "web"])
       bytes += gzipSync(await readFile("dist" + url)).length;
     expect(bytes).toBeLessThanOrEqual(75000);
   });
+
+for (const route of ["paint", "web"]) {
+  test(route + " collection retries, filters and previews by keyboard", async ({ page }) => {
+    let requests = 0;
+    await page.addInitScript(() => { Math.random = () => 0.999999; });
+    await page.route("**/wada-combinations.json", async (request) => {
+      requests++;
+      if (requests === 1) await request.fulfill({ status: 503 });
+      else await request.continue();
+    });
+    await page.goto("/" + route + "/");
+    await page.locator("#hex").fill("#123456");
+
+    const collection = page.locator("#wada");
+    expect(requests).toBe(0);
+    await collection.locator("summary").press("Enter");
+    await expect(collection.getByText("The combinations could not be loaded.")).toBeVisible();
+    const retry = collection.getByRole("button", { name: "Retry" });
+    await retry.press("Enter");
+    const search = collection.getByLabel("Search combinations");
+    await expect(search).toBeFocused();
+    await expect(retry).toBeHidden();
+    expect(requests).toBe(2);
+
+    const featured = collection.locator("#wada-featured button");
+    await expect(featured).toHaveText([/#4 2 swatches/, /#125 3 swatches/, /#344 4 swatches/]);
+    const results = collection.locator("#wada-results button");
+    await expect(results).toHaveCount(24);
+    await expect(results.first()).toHaveAccessibleName("Preview combination #1 2 swatches");
+    await expect(results.last()).toHaveAccessibleName("Preview combination #24 2 swatches");
+    await collection.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(collection.getByRole("heading", { name: "Browse combinations" })).toBeFocused();
+    await expect(results.first()).toHaveAccessibleName("Preview combination #25 2 swatches");
+    await collection.getByRole("button", { name: "Previous", exact: true }).click();
+    await expect(results.first()).toHaveAccessibleName("Preview combination #1 2 swatches");
+
+    const count = collection.getByLabel("Swatch count");
+    await count.selectOption("4");
+    await expect(collection.getByText("1–24 of 108 combinations")).toBeVisible();
+    await search.fill("bLuE");
+    await expect(collection.getByText("1–24 of 47 combinations")).toBeVisible();
+    const random = collection.getByRole("button", { name: "Randomize" });
+    await random.press("Space");
+    await expect(collection.getByText("Page 2 of 2")).toBeVisible();
+    await expect(results).toHaveCount(23);
+    for (const index of [22, 21]) {
+      const id = await results.nth(index).getAttribute("data-combination");
+      await expect(collection.getByRole("heading", { name: "Preview combination #" + id })).toBeVisible();
+      await expect(random).toBeFocused();
+      if (index === 22) await page.keyboard.press("Space");
+    }
+
+    const apply = collection.getByRole("button", { name: "Apply", exact: true });
+    await search.fill("#4");
+    await expect(collection.getByText("No matching combinations")).toBeVisible();
+    await expect(random).toBeDisabled();
+    await expect(apply).toBeHidden();
+    await count.selectOption("2");
+    await expect(results).toHaveCount(1);
+    await results.first().press("Enter");
+    await expect(collection.getByRole("heading", { name: "Preview combination #4" })).toBeFocused();
+    await expect(collection.locator(".wada-swatches")).toContainText("Isabella Color #c5a56e");
+    if (route === "paint") {
+      for (const control of [
+        collection.getByLabel("Main wall"),
+        collection.getByLabel("Ceiling"),
+        collection.getByRole("button", { name: "Swap assignments" }),
+      ]) {
+        await page.keyboard.press("Tab");
+        await expect(control).toBeFocused();
+      }
+    }
+    await page.keyboard.press("Tab");
+    await expect(apply).toBeFocused();
+    await expect(page.locator("#hex")).toHaveValue("#123456");
+    expect(await page.evaluate((tool) =>
+      JSON.parse(sessionStorage.getItem("tintfolio-" + tool)!).active, route)).toContain("123456");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(route === "paint" ? "#mode-pair" : "#mode-text")).toBeFocused();
+    await expect(page.locator("#status")).toHaveText("Sanzo Wada combination #4 applied.");
+    await expect(page.locator("#hex")).toHaveValue("#C5A56E");
+  });
+}
+
+test("paint applies selected and swapped swatches to the configured room", async ({ page }) => {
+  await page.goto("/paint/");
+  await page.getByRole("button", { name: "Colour pair", exact: true }).click();
+  const surfaces = page.getByLabel("Surfaces");
+  await surfaces.selectOption("feature");
+  await page.getByLabel("Room", { exact: true }).selectOption("bedroom");
+  await page.locator("#hex").fill("#123456");
+  const before = await checkedStyles(page);
+  const collection = page.locator("#wada");
+  await collection.locator("summary").click();
+  await collection.locator("#wada-featured").getByRole("button", { name: /#344/ }).click();
+  const wall = collection.getByLabel("Main wall");
+  const feature = collection.getByLabel("Feature wall");
+  await expect(wall).toHaveValue("0");
+  await expect(feature).toHaveValue("1");
+  await expect(wall.locator("option[value='1']")).toBeDisabled();
+  await expect(feature.locator("option[value='0']")).toBeDisabled();
+  await wall.selectOption("2");
+  await feature.selectOption("3");
+  await collection.getByRole("button", { name: "Swap assignments" }).click();
+  await expect(wall).toHaveValue("3");
+  await expect(feature).toHaveValue("2");
+  await surfaces.selectOption("ceiling");
+  await expect(collection.getByLabel("Ceiling")).toHaveValue("2");
+  await surfaces.selectOption("feature");
+  expect(await checkedStyles(page)).toEqual(before);
+
+  await collection.getByRole("button", { name: "Apply", exact: true }).click();
+  const expected = {
+    "Main wall": "#111314", "Feature wall": "#A36AA5", Ceiling: "#F5F0E6", Trim: "#EBE4D7",
+  };
+  await exported(page, expected);
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  const shared = await clipboard(page);
+  expect(new URL(shared).searchParams.toString()).toBe("mode=pair&room=bedroom&pair=feature&wall=111314&feature=A36AA5");
+  await page.reload();
+  await expect(page.getByLabel("Room", { exact: true })).toHaveValue("bedroom");
+  await expect(page.locator("[data-surface=feature]")).toHaveCSS("fill", "rgb(163, 106, 165)");
+  await page.goto(shared);
+  await exported(page, expected);
+  await page.getByRole("button", { name: "Feature wall", exact: true }).click();
+  await expect(page.getByText("Suggestions", { exact: true })).toBeVisible();
+});
+
+test("web labels adjusted and added colours and exports the applied roles", async ({ page }) => {
+  await page.goto("/web/");
+  const collection = page.locator("#wada");
+  const preview = collection.locator("#wada-preview");
+  const apply = preview.getByRole("button", { name: "Apply", exact: true });
+  const featured = collection.locator("#wada-featured");
+  await collection.locator("summary").click();
+  await collection.locator("#wada-results").getByRole("button", { name: /^Preview combination #1 / }).click();
+  await expect(preview.getByText(/Adjusted from Cerulian Blue #0093a5/)).toBeVisible();
+  await expect(preview.locator(".wada-swatches")).toContainText("English Red #d96629");
+  await apply.click();
+  await expect(page.locator("#mode-text")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#advice")).toContainText("Passes");
+
+  await featured.getByRole("button", { name: /#125/ }).click();
+  await expect(preview.getByText(/Added · Black/)).toBeVisible();
+  await apply.click();
+  await expect(page.locator("#mode-site")).toBeFocused();
+  await expect(page.locator("#status")).toHaveText("Sanzo Wada combination #125 applied.");
+  const expected = { Background: "#D1B0A7", Text: "#40456A", Accent: "#0093A5", "Text on accent": "#000000" };
+  await page.getByRole("button", { name: "Copy CSS" }).click();
+  expect(await clipboard(page)).toBe(":root {\n  --background: #D1B0A7;\n  --text: #40456A;\n  --accent: #0093A5;\n  --text-on-accent: #000000;\n}");
+  await exported(page, expected);
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  const shared = await clipboard(page);
+  expect(new URL(shared).searchParams.toString()).toBe("mode=site&background=D1B0A7&text=40456A&accent=0093A5&onAccent=000000");
+  await page.reload();
+  await expect(page.locator("#specimen-button")).toHaveCSS("background-color", "rgb(0, 147, 165)");
+  await page.goto(shared);
+  await exported(page, expected);
+
+  await collection.locator("summary").click();
+  await featured.getByRole("button", { name: /#344/ }).click();
+  await expect(preview.locator(".wada-roles dt")).toHaveCount(4);
+  await expect(preview.getByText(/Added|Adjusted/)).toHaveCount(0);
+});

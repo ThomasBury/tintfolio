@@ -5,7 +5,6 @@ const shapes: Record<string, string> = {
   share:
     '<circle cx="18" cy="5" r="3"/><circle cx="5" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8 11 7-4m-7 6 7 4"/>',
   download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/>',
-  arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
   undo: '<path d="M4 10h10a5 5 0 0 1 0 10h-3M4 10l5-5m-5 5 5 5"/>',
   sliders:
     '<path d="M3 7h6m5 0h7M3 17h11m5 0h2"/><circle cx="11.5" cy="7" r="2.5"/><circle cx="16.5" cy="17" r="2.5"/>',

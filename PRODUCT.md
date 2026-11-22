@@ -17,13 +17,13 @@ Tintfolio helps people explore colour combinations in context and take a usable 
 ## Operating Context
 
 - **Wall paint** lets people try a single colour or a pair in an illustrated room. They can switch rooms, choose where the second colour goes, and set an existing floor colour independently. The preview helps compare combinations. Lighting, materials, and the actual paint finish still need to be judged in the room.
-- **Website colours** starts with a text and background pair and can expand to a palette with a button and its label. It previews the colours on a sample page and checks the contrast of the text pairs.
+- **Website colours** starts with a text and background pair and can expand to a palette with a button and its label. It previews the colours on a dashboard in light and dark themes and checks text, borders and icons.
 
 ## Capabilities and Constraints
 
 - Both editors run in the browser. Each remembers the last valid design for that tab’s session. A valid shared link opens its own design ahead of the saved session.
-- Both editors share designs by URL and export labelled SVG swatches. Website colours also copies CSS custom properties.
-- Website contrast checks use a 4.5:1 threshold for the text pairs. Pass or fail uses the full-precision result, even when the displayed ratio rounds to the threshold.
+- Both editors share designs by URL and can save four designs per editor for comparison. Wall paint prints a surface and floor spec sheet and tints a local photo in memory. Website colours exports the active theme as CSS, Tailwind or Figma Variables JSON.
+- Website contrast checks AA and AAA for body text and large headings and AA for required borders and icons. Pass or fail uses the full-precision result, even when the displayed ratio rounds to the threshold.
 
 ## Evidence on Hand
 

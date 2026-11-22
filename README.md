@@ -1,19 +1,30 @@
 # Tintfolio
 
-Tintfolio is a static colour explorer with two editors. **Wall paint** opens at `/paint/` with a sage living room. Single colour drenches the walls and ceiling in one paint. Try Colour pair to use a second colour on the ceiling or the feature wall. Switch rooms to see the same paints in another setting, and use Existing floor (optional) to match the colour of your floor in the preview. **Website colours** opens at `/web/` with an editorial text pair. Expand it to a site palette to edit a button and its label. The root page opens Wall paint.
+Tintfolio is a static colour explorer with two editors. **Wall paint** opens at `/paint/` with an illustrated sage living room. Try one paint across the walls and ceiling or assign a second colour to the ceiling or feature wall. **Website colours** opens at `/web/` with a sample dashboard. Try a colour pair or edit a full site palette and check its contrast in light and dark previews. The root page opens Wall paint.
 
 ## Run locally
 
-Use Node 24, npm and [Just](https://just.systems/man/en/). The application uses Vite, vanilla TypeScript and Culori. It serves its own fonts and runs entirely in the browser.
+Use Node 24, npm and [Just](https://just.systems/man/en/). Tintfolio uses Vite, vanilla TypeScript and Culori and serves its own fonts.
 
 ```sh
 just install
 just serve
 ```
 
-Open the local URL Vite prints. Run `just` to list commands or `just serve 5174` to choose a different port.
+Open the URL Vite prints. Run `just` to list commands or `just serve 5174` to choose a different port.
 
-Each editor keeps its last valid design for the browser tab’s session. Share copies a link that opens the active colours and mode, including the room, surfaces and any floor colour you chose. A shared design takes precedence over an earlier session. Both editors export labelled SVG swatches of the palette colours. The website editor also copies CSS custom properties.
+## Using the studios
+
+Both editors have one **Colour combinations** library. Search by palette name, pigment, code or Wada number. Filter by swatch count, mood, era or use case. Cards and **Randomize** update the canvas immediately. Use **Undo** in the library to restore the previous design. In Wall paint, use **Swap roles** or open **Room surfaces and swatches** to reassign the selected combination.
+
+Each editor remembers the last design in the browser tab. A valid share URL takes precedence and includes the active colours, lighting or theme. **Saved swatches** stores up to four designs per editor in the browser for comparison and restore.
+
+- **Paint spec sheet** lists the paint HEX for each surface and the existing floor. Use the print dialog to print it or save a PDF. The lighting presets are approximate. Check a physical sample where the paint will be used. **Tint a photo** works in the browser. A shared link opens the illustrated room with the same design.
+- **Export theme** uses the active dashboard colours. Copy or download HEX or OKLCH CSS variables, Tailwind v4 `@theme` CSS, or sRGB DTCG JSON for Figma Variables. [Tailwind theme variables](https://tailwindcss.com/docs/theme) · [Figma mode import](https://help.figma.com/hc/en-us/articles/15343816063383-Modes-for-variables/)
+
+Paint suggestions adjust OKLCH lightness and chroma, then map each suggestion into sRGB before checking for duplicates. Web contrast also uses the final sRGB values. It checks body and large text against AA and AAA and required borders and icons against 3:1 AA. Pass decisions use the full ratio. For example, `#777773` on white displays 4.50:1 and fails body AA. [W3C text contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) · [W3C non-text contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)
+
+The 348 numbered palettes keep Sanzo Wada’s swatch names, HEX values and swatch order from upstream revision `c142bd0bc8049ea48db4da5eb397981f047e8ef4`. Mood and use-case filters use reviewed tags on curated palettes. [Starting palettes](src/examples.json) · [Named palettes](src/named-combinations.json) · [Wada dataset](https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4) · [MIT notice](public/wada-license.txt)
 
 ## Verify a release
 
@@ -22,63 +33,28 @@ just install-browser
 just check
 ```
 
-Run `just lint`, `just test`, `just build` or `just test-browser` individually. Lint checks TypeScript, unused code and whitespace errors in Git diffs. The browser suite serves `dist/` on port 4173. On Linux CI, use `npx playwright install --with-deps chromium` to also install the required system libraries. To use installed Google Chrome, run `PW_CHANNEL=chrome just test-browser`. GitHub Actions runs the type check, unit tests, production build and browser journeys on pushes and pull requests.
+`just check` runs TypeScript, unit tests, the production build and browser tests. The browser suite serves `dist/` on port 4173. Run `PW_CHANNEL=chrome just test-browser` to use installed Google Chrome. The sole GitHub Actions workflow runs these checks on pull requests.
 
-To browse the production build or measure it, start the preview server.
+Run `just preview` and then `just measure` in another terminal for the production build’s performance check. The script measures three cold loads per editor with Lighthouse mobile emulation and simulated throttling. The budgets are 75,000 gzip bytes of initial JavaScript and 2,500 ms median largest contentful paint (LCP). Set `CHROME_PATH` to an installed browser if discovery needs a hint.
 
-```sh
-just preview
-```
+The build generates both pairing pages from the editor templates. Their pairing guidance is readable without JavaScript. The site includes clean canonical URLs in its sitemap and uses the same canonicals for shared query variants.
 
-With the preview server running, execute `just measure` in another terminal. Lighthouse uses an installed Chrome or Chromium. Set `CHROME_PATH` to the browser executable if discovery needs a hint. `just clean` removes generated build and browser test output.
+## Deploy with Cloudflare Workers
 
-## How colours are checked
-
-Paint suggestions adjust OKLCH lightness and chroma. Low-chroma paints produce neutral tones. Each result is mapped into sRGB and converted to six-digit HEX before duplicates and unchanged suggestions are removed. The fixed ceiling and trim are included in the swatch sheet whenever those surfaces use neutrals. [Culori API reference](https://culorijs.org/api/)
-
-Website contrast uses the final sRGB HEX colours and a 4.5:1 minimum for both text pairs. The displayed ratio is rounded to two decimals. Pass or fail uses the full precision result. The regression fixture `#777773` on white displays 4.50:1 and still needs adjustment. A proposed text correction is checked again after conversion to HEX. [W3C contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
-
-The six starting palettes and their design rationales live in [src/examples.json](src/examples.json).
-
-**Browse palettes** jumps from either editor’s heading to three featured combinations below the editor. The collection starts with 12 named palettes and loads 348 numbered Wada combinations automatically. Search by palette name, colour name, Pantone code, or combination number. [Named palettes](src/named-combinations.json)
-
-The Wada data keeps the upstream swatch names, HEX values and swatch order from revision `c142bd0bc8049ea48db4da5eb397981f047e8ef4`. Its swatch table stores each name and HEX once. Each combination row starts with the combination number and lists zero-based indices into that table in upstream order. [Pinned dataset and conversion notes](https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4) · [MIT notice](public/wada-license.txt)
-
-## Mobile walkthrough
-
-The automated journeys ran in Chrome with touch emulation at **360 × 640 CSS pixels**. They selected Ceiling, applied Mist and used Undo, then repeated the task with Text on accent and the button-text correction. Each check verified that the changed surface or button and the action were on screen. Both restored the original HEX. The suite also checked accessible names, primary target dimensions, keyboard focus, and horizontal overflow at 320 pixels.
-
-With a focused HEX field, a separate check reduced the viewport to 320 × 340 and confirmed that an incomplete value and its feedback remained reachable. A native phone keyboard walkthrough is still pending. No outside participant tried these tasks.
-
-## Mobile lab measurements
-
-Each route is loaded three times in a fresh headless Chrome process. The script uses Lighthouse’s default mobile emulation and simulated throttling, with a 150 ms network round trip, 1,638.4 Kbps throughput and 4× CPU slowdown. Initial JavaScript is measured from the script requests observed on each route, including shared chunks. Each built file is gzip-compressed separately with Node’s default compression. The budgets are 75,000 bytes and 2,500 ms median largest contentful paint (LCP).
-
-Local production build, 22 November 2026, Lighthouse 13.6.0 and headless Chrome 158 on Linux.
-
-| Route | Three cold LCP runs (ms) | Median LCP | Initial JS, gzip |
-| --- | --- | ---: | ---: |
-| `/paint/` | 1,450 · 1,563 · 1,562 | 1,562 ms | 29,803 bytes |
-| `/web/` | 1,488 · 1,172 · 1,548 | 1,488 ms | 29,803 bytes |
-
-## Deploy with Cloudflare Pages
-
-Connect the Git repository to a Cloudflare Pages project and use these build settings.
+The production origin is `https://tintfolio.bury-thomas.workers.dev`. Workers Static Assets serves `dist/` with a real 404 for unknown URLs. Use the existing **tintfolio** Worker’s **Settings → Builds** for the GitHub integration. [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/) · [Static asset routing](https://developers.cloudflare.com/workers/static-assets/routing/)
 
 | Setting | Value |
 | --- | --- |
+| Git repository | `ThomasBury/tintfolio` |
 | Production branch | `main` |
 | Root directory | Repository root |
 | Build command | `npm run build` |
-| Build output directory | `dist` |
-| Node version | Set `NODE_VERSION` to `24` |
+| Deploy command | `npx --no-install wrangler deploy` |
+| Preview command | `npx --no-install wrangler preview` |
+| Build variables | `NODE_VERSION=24`, `TINTFOLIO_ORIGIN=https://tintfolio.bury-thomas.workers.dev` |
 
-Pages supplies `CF_PAGES_URL` during its build. Tintfolio uses it to give social crawlers absolute URLs for the two route-specific preview images. The output contains ordinary HTML entry points for both editors, so shared URLs work without a catch-all rewrite. [Cloudflare Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/)
+Enable **Builds for Preview branches**. Native `workers.dev` Preview URLs send `X-Robots-Tag: noindex`. Wrangler is pinned in `package.json` and `package-lock.json`. Require the `build` GitHub Actions job on an up-to-date branch and require a pull request to merge to `main`, including for administrators. [Workers Previews](https://developers.cloudflare.com/workers/previews/) · [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 
-For a manual upload to an existing Pages project, make Wrangler available on your PATH and authenticate with `wrangler login`. Pass the project name, branch and public URL.
+Before handing over a release, check the single GitHub workflow and Cloudflare Preview on the PR. After merging, confirm one production deployment in Cloudflare and smoke-test both editors, the pilot pages and a previously shared link. If a legacy hostname is discovered, keep its redirect on the old hostname with the incoming path and query string intact.
 
-```sh
-just deploy my-pages-site preview https://preview.my-pages-site.pages.dev
-```
-
-The recipe rebuilds `dist/` with the supplied URL for social images, then uploads it. Use your configured production branch and public URL to publish to production. [Wrangler Pages deploy](https://developers.cloudflare.com/workers/wrangler/commands/pages/#pages-deploy)
+To roll back, open **Workers & Pages → tintfolio → Deployments**, select the last known-good version’s menu and choose **Rollback**. Confirm the new active deployment and open both editors. [Cloudflare rollbacks](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/)

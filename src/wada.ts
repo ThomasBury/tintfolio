@@ -14,6 +14,8 @@ export interface Combination {
   id: number | string;
   swatches: Swatch[];
   note?: string;
+  starter?: number;
+  tags?: { mood?: string; era?: string; use?: string[] };
 }
 export interface Assignment {
   role: Role;
@@ -37,7 +39,7 @@ export function unpackCollection(data: CollectionData): Combination[] {
       indices.some((index) => !Number.isInteger(index) || !swatches[index])
     )
       throw new Error("Invalid collection combination");
-    return { id, swatches: indices.map((index) => swatches[index]) };
+    return { id, swatches: indices.map((index) => swatches[index]), tags: { era: "Early Shōwa" } };
   });
 }
 
@@ -54,8 +56,8 @@ export function matchingCombinations(
       (byId
         ? id === Number(term.replace("#", ""))
         : (typeof id === "string" && id.toLowerCase().includes(term)) ||
-          swatches.some(({ name, code }) =>
-            name.toLowerCase().includes(term) || code?.toLowerCase().includes(term))),
+          swatches.some(({ name, code, hex }) =>
+            name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term))),
   );
 }
 

@@ -1,7 +1,11 @@
 import { ceilingColour, defaultFloor, neutral, rooms, type Design } from "./design.ts";
 
-const defs = `<defs>
-  <linearGradient id="day"><stop stop-color="#fff5d5" stop-opacity=".20"/><stop offset=".65" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#3a3529" stop-opacity=".12"/></linearGradient>
+const lighting = {
+  north: '<linearGradient id="room-light" x2="1" y2=".6"><stop stop-color="#C0DFFF" stop-opacity=".32"/><stop offset=".65" stop-color="#C0DFFF" stop-opacity=".06"/><stop offset="1" stop-color="#38526F" stop-opacity=".32"/></linearGradient>',
+  golden: '<linearGradient id="room-light" x2="1" y2=".35"><stop stop-color="#FFCC78" stop-opacity=".64"/><stop offset=".6" stop-color="#FBBB66" stop-opacity=".13"/><stop offset="1" stop-color="#664747" stop-opacity=".32"/></linearGradient>',
+  evening: '<radialGradient id="room-light" cx=".23" cy=".37" r=".86"><stop stop-color="#FFC881" stop-opacity=".68"/><stop offset=".42" stop-color="#EDA15A" stop-opacity=".24"/><stop offset="1" stop-color="#382932" stop-opacity=".62"/></radialGradient>',
+};
+const defs = `
   <linearGradient id="oak" x2="1" y2=".65"><stop stop-color="#d6af82"/><stop offset=".5" stop-color="#b9865d"/><stop offset="1" stop-color="#916446"/></linearGradient>
   <linearGradient id="linen" x2=".2" y2="1"><stop stop-color="#eee4d2"/><stop offset=".62" stop-color="#dfd1bb"/><stop offset="1" stop-color="#bea98e"/></linearGradient>
   <linearGradient id="clay" x2=".9" y2=".4"><stop stop-color="#a65e48"/><stop offset=".35" stop-color="#d59471"/><stop offset="1" stop-color="#995940"/></linearGradient>
@@ -11,7 +15,7 @@ const defs = `<defs>
   <filter id="blur"><feGaussianBlur stdDeviation="5"/></filter>
   <g id="leaf"><path d="M0 0Q-27-9-28-36Q-5-36 0 0" fill="#53694d"/><path d="M0 0l-24-31" stroke="#879276" stroke-width="1"/></g>
   <g id="print"><rect x="2" y="3" width="89" height="113" fill="#685a48" opacity=".3"/><rect width="89" height="113" rx=".8" fill="url(#oak)"/><rect x="4" y="4" width="81" height="105" fill="#f0e4ce"/><svg x="12" y="13" width="65" height="87" viewBox="0 0 65 87"><rect width="65" height="87" fill="#ddcdb0"/><circle cx="46" cy="22" r="13" fill="#b76c4e"/><path d="M-4 80Q17 14 45 50L70 78V90H0" fill="#7e896c"/><path d="M-4 65Q17 45 33 64T70 60V90H0" fill="#475b4b"/></svg></g>
-  </defs>`;
+`;
 
 const shell = `<path data-surface="ceiling" fill="var(--ceiling)" d="M0 0h840l-101 49H106z"/>
   <path data-surface="wall" fill="var(--wall)" d="M0 0l106 49v241L0 364z"/>
@@ -19,7 +23,6 @@ const shell = `<path data-surface="ceiling" fill="var(--ceiling)" d="M0 0h840l-1
   <path data-surface="wall" fill="var(--wall)" d="M739 49L840 0v364l-101-74z"/>
   <path fill="#25291e" opacity=".12" d="M0 0l106 49v241L0 364z"/>
   <path fill="#fffae8" opacity=".16" d="M739 49L840 0v364l-101-74z"/>
-  <path pointer-events="none" fill="url(#day)" d="M0 0h840v364l-101-74H106L0 364z"/>
   <path data-surface="floor" fill="var(--floor)" d="M0 364l106-74h633l101 74v66H0z"/>
   <g fill="none" stroke="#000" opacity=".18"><path d="M0 389l210-99M87 430l199-140m-50 140l114-140m36 140l39-140m126 140l-58-140m219 140L557 290m283 119L623 290m217 71l-150-71M72 314h694M36 343h775M0 380h840"/></g>
   <path fill="var(--trim)" d="M0 350l106-70h633l101 70v13l-101-73H106L0 365z"/>
@@ -77,5 +80,5 @@ export function room(d: Design) {
     d.mode === "pair" && d.pair === "feature"
       ? d.colours.feature
       : d.colours.wall;
-  return `<svg id="room" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 430" role="img" aria-label="${rooms[d.room]} paint preview" style="--wall:${d.colours.wall};--feature:${feature};--ceiling:${ceilingColour(d)};--trim:${neutral.trim};--floor:${d.floor ?? defaultFloor}">${defs}${shell}${furnishings[d.room]}</svg>`;
+  return `<svg id="room" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 430" role="img" aria-label="${rooms[d.room]} paint preview" style="--wall:${d.colours.wall};--feature:${feature};--ceiling:${ceilingColour(d)};--trim:${neutral.trim};--floor:${d.floor ?? defaultFloor}"><defs>${defs}${lighting[d.lighting]}</defs><g style="isolation:isolate">${shell}${furnishings[d.room]}<rect width="840" height="430" fill="url(#room-light)" style="mix-blend-mode:soft-light" pointer-events="none"/></g></svg>`;
 }

@@ -25,6 +25,7 @@
     "@types/culori": "^4.0.1",
     "typescript": "~5.9.3",
     "vite": "^8.0.0",
-    "lighthouse": "^13.0.0"
+    "lighthouse": "^13.0.0",
+    "wrangler": "4.166.0"
   }
 }

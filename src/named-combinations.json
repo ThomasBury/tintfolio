@@ -1,0 +1,103 @@
+[
+  {
+    "id": "The Ginkgo",
+    "note": "Two quiet colours leave the saturated coral red as the focal point.",
+    "swatches": [
+      { "name": "Muted green", "hex": "#4B624A" },
+      { "name": "Hot coral-red", "hex": "#E64435" },
+      { "name": "Off-white", "hex": "#F5F6F0" }
+    ]
+  },
+  {
+    "id": "Cool Fall Breeze",
+    "note": "Pale cream and blue are close in lightness. Deep plum gives text or a logo stronger contrast.",
+    "swatches": [
+      { "name": "Pale cream", "hex": "#ECE5D2" },
+      { "name": "Pale blue", "hex": "#B6CBDE" },
+      { "name": "Deep plum", "hex": "#553E53" }
+    ]
+  },
+  {
+    "id": "Flower Market",
+    "swatches": [
+      { "name": "Vanilla Custard", "hex": "#F2E5CD", "code": "12-0815 TCX" },
+      { "name": "Flamingo Plume", "hex": "#D58592", "code": "16-1618 TCX" },
+      { "name": "Brandy Brown", "hex": "#783E33", "code": "19-1341 TCX" }
+    ]
+  },
+  {
+    "id": "Chocolate & Blues",
+    "swatches": [
+      { "name": "Chocolate Fondant", "hex": "#513834", "code": "19-1432 TCX" },
+      { "name": "Apricot Illusion", "hex": "#D8C2A8", "code": "14-1120 TCX" },
+      { "name": "Dress Blues", "hex": "#303846", "code": "19-4024 TCX" }
+    ]
+  },
+  {
+    "id": "Burgundy & Jade",
+    "swatches": [
+      { "name": "burgundy", "hex": "#7D2E30", "code": "P 50-8 C" },
+      { "name": "lilac", "hex": "#D4C5D3", "code": "P 83-10 C" },
+      { "name": "jade", "hex": "#24765F", "code": "P 134-15 C" }
+    ]
+  },
+  {
+    "id": "Bronze & Pear",
+    "swatches": [
+      { "name": "bronze", "hex": "#715426", "code": "P 19-16 C" },
+      { "name": "cream", "hex": "#EAEBC3", "code": "P 166-1 C" },
+      { "name": "pear green", "hex": "#A2B22B", "code": "P 163-16 C" }
+    ]
+  },
+  {
+    "id": "Candy & Cobalt",
+    "swatches": [
+      { "name": "vanilla", "hex": "#F4EDDE", "code": "P 7-1 C" },
+      { "name": "candy pink", "hex": "#DA92B8", "code": "P 76-5 C" },
+      { "name": "cobalt blue", "hex": "#274D90", "code": "P 104-8 C" }
+    ]
+  },
+  {
+    "id": "Navy & Periwinkle",
+    "swatches": [
+      { "name": "navy blue", "hex": "#2E416C", "code": "P 105-8 C" },
+      { "name": "periwinkle", "hex": "#A3B4D4", "code": "P 106-3 C" },
+      { "name": "milk", "hex": "#F3F0EC", "code": "P 1-1 C" }
+    ]
+  },
+  {
+    "id": "Slate & Gold",
+    "swatches": [
+      { "name": "slate", "hex": "#454443", "code": "P 173-16 C" },
+      { "name": "lavender", "hex": "#D0C5D4", "code": "P 88-9 C" },
+      { "name": "gold", "hex": "#E8C675", "code": "P 10-5 C" }
+    ]
+  },
+  {
+    "id": "Denim & Olive",
+    "swatches": [
+      { "name": "MIDNIGHT DENIM", "hex": "#2E465D" },
+      { "name": "OLIVE MARTINI", "hex": "#686923" },
+      { "name": "WILD CARAMEL", "hex": "#B27945" },
+      { "name": "LAVENDER HAZE", "hex": "#9986B3" }
+    ]
+  },
+  {
+    "id": "Saffron & Teal",
+    "swatches": [
+      { "name": "SAFFRON SUN", "hex": "#D6A145" },
+      { "name": "BLOOD ORANGE", "hex": "#C03E1F" },
+      { "name": "RIVIERA TEAL", "hex": "#2C869B" },
+      { "name": "OLIVE OIL", "hex": "#877731" }
+    ]
+  },
+  {
+    "id": "Merlot & Butter",
+    "swatches": [
+      { "name": "MERLOT MOOD", "hex": "#762530" },
+      { "name": "BUTTER BISCUIT", "hex": "#EBCE84" },
+      { "name": "GREEN OLIVE", "hex": "#7A7B2D" },
+      { "name": "CHESTNUT CHEVRON", "hex": "#905843" }
+    ]
+  }
+]

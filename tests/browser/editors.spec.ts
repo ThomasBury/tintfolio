@@ -325,41 +325,61 @@ for (const route of ["paint", "web"])
 for (const route of ["paint", "web"]) {
   test(route + " collection retries, filters and previews by keyboard", async ({ page }) => {
     let requests = 0;
+    let failRequest = () => {};
+    const waiting = new Promise<void>((resolve) => { failRequest = resolve; });
     await page.addInitScript(() => { Math.random = () => 0.999999; });
     await page.route("**/wada-combinations.json", async (request) => {
       requests++;
-      if (requests === 1) await request.fulfill({ status: 503 });
-      else await request.continue();
+      if (requests === 1) {
+        await waiting;
+        await request.fulfill({ status: 503 });
+      } else await request.continue();
     });
     await page.goto("/" + route + "/");
     await page.locator("#hex").fill("#123456");
 
     const collection = page.locator("#wada");
-    expect(requests).toBe(0);
-    await collection.locator("summary").press("Enter");
-    await expect(collection.getByText("The combinations could not be loaded.")).toBeVisible();
-    const retry = collection.getByRole("button", { name: "Retry" });
+    const featuredSection = page.getByRole("region", { name: "Colour combinations", exact: true });
+    const featured = featuredSection.locator("#wada-featured button");
+    await expect(featured).toHaveText([/#4 2 swatches/, /#125 3 swatches/, /#344 4 swatches/]);
+    await expect(featuredSection.getByRole("status")).toHaveText("Loading more combinations…");
+    await expect.poll(() => requests).toBe(1);
+    const results = collection.locator("#wada-results button");
+    await expect(results).toHaveCount(12);
+    const browse = collection.getByRole("heading", { name: "Browse combinations" });
+    await featuredSection.getByRole("link", { name: "Browse all combinations" }).press("Enter");
+    await expect(browse).toBeFocused();
+    await expect(browse).toBeInViewport({ ratio: 1 });
+
+    const previewTitle = collection.getByRole("heading", { name: "Preview combination #4" });
+    await featured.first().press("Enter");
+    await expect(previewTitle).toBeFocused();
+    await expect(previewTitle).toBeInViewport({ ratio: 1 });
+    failRequest();
+    await expect(featuredSection.getByRole("status")).toHaveText("The Wada combinations could not be loaded.");
+    await expect(results.first()).toHaveAccessibleName("Preview The Ginkgo 3 swatches");
+    await expect(featured.first()).toHaveAttribute("aria-pressed", "true");
+    await expect(previewTitle).toBeVisible();
+    const retry = featuredSection.getByRole("button", { name: "Retry" });
     await retry.press("Enter");
     const search = collection.getByLabel("Search combinations");
     await expect(search).toBeFocused();
     await expect(retry).toBeHidden();
     expect(requests).toBe(2);
 
-    const featured = collection.locator("#wada-featured button");
-    await expect(featured).toHaveText([/#4 2 swatches/, /#125 3 swatches/, /#344 4 swatches/]);
-    const results = collection.locator("#wada-results button");
     await expect(results).toHaveCount(24);
-    await expect(results.first()).toHaveAccessibleName("Preview combination #1 2 swatches");
-    await expect(results.last()).toHaveAccessibleName("Preview combination #24 2 swatches");
+    await expect(collection.getByRole("button", { name: "Preview combination #4 2 swatches" })).toHaveAttribute("aria-pressed", "true");
+    await expect(results.nth(12)).toHaveAccessibleName("Preview combination #1 2 swatches");
+    await expect(results.last()).toHaveAccessibleName("Preview combination #12 2 swatches");
     await collection.getByRole("button", { name: "Next", exact: true }).click();
-    await expect(collection.getByRole("heading", { name: "Browse combinations" })).toBeFocused();
-    await expect(results.first()).toHaveAccessibleName("Preview combination #25 2 swatches");
+    await expect(collection.getByRole("heading", { name: "Results" })).toBeFocused();
+    await expect(results.first()).toHaveAccessibleName("Preview combination #13 2 swatches");
     await collection.getByRole("button", { name: "Previous", exact: true }).click();
-    await expect(results.first()).toHaveAccessibleName("Preview combination #1 2 swatches");
+    await expect(results.first()).toHaveAccessibleName("Preview The Ginkgo 3 swatches");
 
     const count = collection.getByLabel("Swatch count");
     await count.selectOption("4");
-    await expect(collection.getByText("1–24 of 108 combinations")).toBeVisible();
+    await expect(collection.getByText("1–24 of 111 combinations")).toBeVisible();
     await search.fill("bLuE");
     await expect(collection.getByText("1–24 of 47 combinations")).toBeVisible();
     const random = collection.getByRole("button", { name: "Randomize" });
@@ -381,13 +401,13 @@ for (const route of ["paint", "web"]) {
     await count.selectOption("2");
     await expect(results).toHaveCount(1);
     await results.first().press("Enter");
-    await expect(collection.getByRole("heading", { name: "Preview combination #4" })).toBeFocused();
+    await expect(previewTitle).toBeFocused();
+    await expect(previewTitle).toBeInViewport({ ratio: 1 });
     await expect(collection.locator(".wada-swatches")).toContainText("Isabella Color #c5a56e");
     if (route === "paint") {
       for (const control of [
         collection.getByLabel("Main wall"),
         collection.getByLabel("Ceiling"),
-        collection.getByRole("button", { name: "Swap assignments" }),
       ]) {
         await page.keyboard.press("Tab");
         await expect(control).toBeFocused();
@@ -400,12 +420,110 @@ for (const route of ["paint", "web"]) {
       JSON.parse(sessionStorage.getItem("tintfolio-" + tool)!).active, route)).toContain("123456");
     await page.keyboard.press("Enter");
     await expect(page.locator(route === "paint" ? "#mode-pair" : "#mode-text")).toBeFocused();
-    await expect(page.locator("#status")).toHaveText("Sanzo Wada combination #4 applied.");
+    await expect(page.locator("#status")).toHaveText("Combination #4 applied.");
     await expect(page.locator("#hex")).toHaveValue("#C5A56E");
+
+    const credit = page.locator("section:has(#examples) + footer");
+    await expect(credit).toContainText("Many combinations come from Sanzo Wada’s");
+    await expect(credit.getByRole("link", { name: "A Dictionary of Color Combinations" })).toHaveAttribute("href", /seigensha\.com/);
+    await expect(credit.getByRole("link", { name: "Dataset and conversion notes" })).toHaveAttribute("href", /dictionary-of-colour-combinations/);
+    await expect(credit.getByRole("link", { name: "MIT notice" })).toHaveAttribute("href", "/wada-license.txt");
   });
 }
 
-test("paint applies selected and swapped swatches to the configured room", async ({ page }) => {
+for (const route of ["paint", "web"]) {
+  test(route + " finds and applies named palettes", async ({ page }) => {
+    let resume = () => {};
+    const waiting = new Promise<void>((resolve) => { resume = resolve; });
+    await page.route("**/wada-combinations.json", async (request) => {
+      await waiting;
+      await request.continue();
+    });
+    await page.goto("/" + route + "/");
+    const collection = page.locator("#wada");
+    const search = collection.getByLabel("Search combinations");
+    const preview = collection.locator("#wada-preview");
+    const results = collection.locator("#wada-results button");
+    await search.fill("12-0815 tcx");
+    await expect(results).toHaveCount(1);
+    await expect(results.first()).toHaveAccessibleName("Preview Flower Market 3 swatches");
+    await results.first().focus();
+    resume();
+    await expect(page.locator("#wada-load")).toBeEmpty();
+    await expect(results.first()).toBeFocused();
+    await results.first().press("Enter");
+    await expect(preview).toContainText("Vanilla Custard #F2E5CD · 12-0815 TCX");
+
+    await search.fill("merlot & butter");
+    const count = collection.getByLabel("Swatch count");
+    await count.selectOption("3");
+    await expect(results).toHaveCount(0);
+    await count.selectOption("4");
+    await expect(results).toHaveCount(1);
+    await results.first().press("Enter");
+    await expect(results.first()).toHaveAttribute("aria-pressed", "true");
+    await expect(preview.getByRole("heading", { name: "Preview Merlot & Butter" })).toBeFocused();
+    await expect(preview.locator(".wada-swatches code")).toHaveText([
+      "#762530", "#EBCE84", "#7A7B2D", "#905843",
+    ]);
+
+    const apply = preview.getByRole("button", { name: "Apply", exact: true });
+    if (route === "paint") {
+      await preview.getByLabel("Ceiling").selectOption("3");
+      await apply.click();
+      await expect(page.locator("#mode-pair")).toBeFocused();
+      await expect(page.locator("#status")).toHaveText("Merlot & Butter applied.");
+      await exported(page, { "Main wall": "#762530", Ceiling: "#905843", Trim: "#EBE4D7" });
+    } else {
+      await count.selectOption("3");
+      await search.fill("The Ginkgo");
+      await results.first().press("Enter");
+      await expect(preview).toContainText("saturated coral red as the focal point");
+      await apply.click();
+      await expect(page.locator("#mode-site")).toBeFocused();
+      await expect(page.locator("#status")).toHaveText("The Ginkgo applied.");
+      await exported(page, {
+        Background: "#F5F6F0", Text: "#4B624A", Accent: "#E64435", "Text on accent": "#000000",
+      });
+    }
+  });
+}
+
+test("paint swaps a wall and ceiling pair and keeps the button focused", async ({ page }) => {
+  await page.goto("/paint/");
+  const swap = page.getByRole("button", { name: "Swap colours" });
+  await expect(swap).toHaveCount(0);
+  await page.getByRole("button", { name: "Colour pair", exact: true }).click();
+  const room = page.locator("#room");
+  const roomBox = (await room.boundingBox())!;
+  expect((await swap.boundingBox())!.x).toBeGreaterThan(roomBox.x + roomBox.width);
+  await page.getByRole("button", { name: "Ceiling", exact: true }).click();
+  await page.locator("#hex").fill("#E4D0BC");
+
+  const before = await checkedStyles(page);
+  await swap.press("Space");
+  await expect(swap).toBeFocused();
+  await expect(page.locator("#hex")).toHaveValue("#A9B39E");
+  await expect(page.locator("[data-surface=ceiling]")).toHaveCSS("fill", "rgb(169, 179, 158)");
+  await expect(page.locator("[data-surface=wall]").first()).toHaveCSS("fill", "rgb(228, 208, 188)");
+  await page.keyboard.press("Space");
+  await expect(swap).toBeFocused();
+  expect(await checkedStyles(page)).toEqual(before);
+  await page.keyboard.press("Space");
+
+  const expected = { "Main wall": "#E4D0BC", Ceiling: "#A9B39E", Trim: "#EBE4D7" };
+  await exported(page, expected);
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  const shared = await clipboard(page);
+  expect(new URL(shared).searchParams.toString()).toBe("mode=pair&room=living&pair=ceiling&wall=E4D0BC&ceiling=A9B39E");
+  await page.reload();
+  await expect(page.locator("#hex")).toHaveValue("#E4D0BC");
+  await expect(page.locator("[data-surface=ceiling]")).toHaveCSS("fill", "rgb(169, 179, 158)");
+  await page.goto(shared);
+  await exported(page, expected);
+});
+
+test("paint swaps a feature wall pair after applying chosen swatches", async ({ page }) => {
   await page.goto("/paint/");
   await page.getByRole("button", { name: "Colour pair", exact: true }).click();
   const surfaces = page.getByLabel("Surfaces");
@@ -414,8 +532,8 @@ test("paint applies selected and swapped swatches to the configured room", async
   await page.locator("#hex").fill("#123456");
   const before = await checkedStyles(page);
   const collection = page.locator("#wada");
-  await collection.locator("summary").click();
-  await collection.locator("#wada-featured").getByRole("button", { name: /#344/ }).click();
+  await page.locator("#wada-featured").getByRole("button", { name: /#344/ }).click();
+  await expect(collection.getByRole("button", { name: "Swap assignments" })).toHaveCount(0);
   const wall = collection.getByLabel("Main wall");
   const feature = collection.getByLabel("Feature wall");
   await expect(wall).toHaveValue("0");
@@ -424,15 +542,20 @@ test("paint applies selected and swapped swatches to the configured room", async
   await expect(feature.locator("option[value='0']")).toBeDisabled();
   await wall.selectOption("2");
   await feature.selectOption("3");
-  await collection.getByRole("button", { name: "Swap assignments" }).click();
-  await expect(wall).toHaveValue("3");
-  await expect(feature).toHaveValue("2");
   await surfaces.selectOption("ceiling");
-  await expect(collection.getByLabel("Ceiling")).toHaveValue("2");
+  await expect(collection.getByLabel("Ceiling")).toHaveValue("3");
   await surfaces.selectOption("feature");
   expect(await checkedStyles(page)).toEqual(before);
 
   await collection.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(page.locator("#hex")).toHaveValue("#A36AA5");
+  await expect(page.locator("[data-surface=feature]")).toHaveCSS("fill", "rgb(17, 19, 20)");
+  const swap = page.getByRole("button", { name: "Swap colours" });
+  await swap.click();
+  await expect(swap).toBeFocused();
+  await expect(page.locator("#hex")).toHaveValue("#111314");
+  await expect(page.locator("[data-surface=wall]").first()).toHaveCSS("fill", "rgb(17, 19, 20)");
+  await expect(page.locator("[data-surface=feature]")).toHaveCSS("fill", "rgb(163, 106, 165)");
   const expected = {
     "Main wall": "#111314", "Feature wall": "#A36AA5", Ceiling: "#F5F0E6", Trim: "#EBE4D7",
   };
@@ -454,8 +577,7 @@ test("web labels adjusted and added colours and exports the applied roles", asyn
   const collection = page.locator("#wada");
   const preview = collection.locator("#wada-preview");
   const apply = preview.getByRole("button", { name: "Apply", exact: true });
-  const featured = collection.locator("#wada-featured");
-  await collection.locator("summary").click();
+  const featured = page.locator("#wada-featured");
   await collection.locator("#wada-results").getByRole("button", { name: /^Preview combination #1 / }).click();
   await expect(preview.getByText(/Adjusted from Cerulian Blue #0093a5/)).toBeVisible();
   await expect(preview.locator(".wada-swatches")).toContainText("English Red #d96629");
@@ -467,7 +589,7 @@ test("web labels adjusted and added colours and exports the applied roles", asyn
   await expect(preview.getByText(/Added · Black/)).toBeVisible();
   await apply.click();
   await expect(page.locator("#mode-site")).toBeFocused();
-  await expect(page.locator("#status")).toHaveText("Sanzo Wada combination #125 applied.");
+  await expect(page.locator("#status")).toHaveText("Combination #125 applied.");
   const expected = { Background: "#D1B0A7", Text: "#40456A", Accent: "#0093A5", "Text on accent": "#000000" };
   await page.getByRole("button", { name: "Copy CSS" }).click();
   expect(await clipboard(page)).toBe(":root {\n  --background: #D1B0A7;\n  --text: #40456A;\n  --accent: #0093A5;\n  --text-on-accent: #000000;\n}");
@@ -480,7 +602,6 @@ test("web labels adjusted and added colours and exports the applied roles", asyn
   await page.goto(shared);
   await exported(page, expected);
 
-  await collection.locator("summary").click();
   await featured.getByRole("button", { name: /#344/ }).click();
   await expect(preview.locator(".wada-roles dt")).toHaveCount(4);
   await expect(preview.getByText(/Added|Adjusted/)).toHaveCount(0);

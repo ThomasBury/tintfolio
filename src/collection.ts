@@ -1,4 +1,5 @@
 import { labels, type Pair, type Tool } from "./design.ts";
+import namedCombinations from "./named-combinations.json" with { type: "json" };
 import {
   assignWeb,
   matchingCombinations,
@@ -10,22 +11,30 @@ import {
 } from "./wada.ts";
 
 const pageSize = 24;
-const featuredIds = [4, 125, 344];
+declare const __FEATURED_COMBINATIONS__: Combination[];
+const featured = __FEATURED_COMBINATIONS__;
 const escapeText = (text: string) =>
-  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const chip = (hex: string) =>
   `<i class="chip" style="--swatch:${hex}" aria-hidden="true"></i>`;
+const cardSelector = (id: Combination["id"]) =>
+  `[data-combination="${CSS.escape(String(id))}"]`;
 
-function card({ id, swatches }: Combination, selected?: number) {
-  return `<button type="button" class="wada-card" data-combination="${id}" aria-pressed="${id === selected}">
+function previewLabel(id: Combination["id"]) {
+  return typeof id === "number" ? `combination #${id}` : id;
+}
+
+function card({ id, swatches }: Combination, selected?: Combination["id"]) {
+  const title = typeof id === "number" ? `#${id}` : escapeText(id);
+  return `<button type="button" class="wada-card" data-combination="${escapeText(String(id))}" aria-pressed="${id === selected}" aria-label="Preview ${escapeText(previewLabel(id))} ${swatches.length} swatches">
     <span class="wada-band" aria-hidden="true">${swatches.map(({ hex }) => chip(hex)).join("")}</span>
-    <span><span class="sr">Preview combination </span><b>#${id}</b> <small>${swatches.length} swatches</small></span>
+    <span><b>${title}</b> <small>${swatches.length} swatches</small></span>
   </button>`;
 }
 
 function swatchList(swatches: Swatch[]) {
-  return `<ul class="wada-swatches">${swatches.map(({ hex, name }) =>
-    `<li>${chip(hex)}<span>${escapeText(name)} <code>${hex}</code></span></li>`,
+  return `<ul class="wada-swatches">${swatches.map(({ hex, name, code }) =>
+    `<li>${chip(hex)}<span>${escapeText(name)} <code>${hex}</code>${code ? ` · ${escapeText(code)}` : ""}</span></li>`,
   ).join("")}</ul>`;
 }
 
@@ -48,58 +57,63 @@ function paintRoles(swatches: Swatch[]) {
     `<label><span id="wada-${id}-label"></span><span class="wada-paint-select">
       <i class="chip" id="wada-${id}-chip" aria-hidden="true"></i>
       <select id="wada-${id}">${options}</select></span></label>`;
-  return `<div class="wada-paint-roles">${field("wall")}${field("secondary")}
-    <button type="button" class="outline" id="wada-swap">Swap assignments</button></div>`;
+  return `<div class="wada-paint-roles">${field("wall")}${field("secondary")}</div>`;
 }
 
 export function mountCollection(
-  after: HTMLElement,
+  curated: HTMLElement,
   tool: Tool,
   target: Pair,
-  apply: (id: number, assignments: Assignment[]) => void,
+  apply: (id: Combination["id"], assignments: Assignment[]) => void,
 ) {
-  after.insertAdjacentHTML("afterend", `
-    <details class="examples wada" id="wada">
-      <summary><h2>Sanzo Wada collection</h2></summary>
-      <p class="wada-credit">348 combinations from Sanzo Wada’s
+  curated.insertAdjacentHTML("beforebegin", `
+    <section class="wada-featured" aria-labelledby="wada-featured-title">
+      <h2 id="wada-featured-title" tabindex="-1">Colour combinations</h2>
+      <div id="wada-featured" class="wada-grid">${featured.map((combination) => card(combination)).join("")}</div>
+      <div class="wada-featured-actions">
+        <a href="#wada-browse">Browse all combinations</a>
+        <p id="wada-load" role="status"></p>
+        <button type="button" class="outline" id="wada-retry" hidden>Retry</button>
+      </div>
+    </section>`);
+  curated.insertAdjacentHTML("afterend", `
+    <footer class="wada-credit">Many combinations come from Sanzo Wada’s
         <a href="https://en.seigensha.com/books/978-4-86152-247-5/"><cite>A Dictionary of Color Combinations</cite></a>,
-        published by Seigensha. Data compiled by Dain M. Blodorn Kim, with sRGB conversion by Matt DesLauriers.
+        published by Seigensha.
         <a href="https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4">Dataset and conversion notes</a> ·
         <a href="/wada-license.txt">MIT notice</a>
-      </p>
-      <p id="wada-load" role="status"></p>
-      <button type="button" class="outline" id="wada-retry" hidden>Retry</button>
-      <div id="wada-content" hidden>
-        <h3>Featured combinations</h3>
-        <div id="wada-featured" class="wada-grid"></div>
-        <div class="wada-filters">
-          <label>Search combinations<input id="wada-search" type="search" placeholder="Number or colour name"></label>
-          <label>Swatch count<select id="wada-count">
-            <option value="0">Any count</option>
-            <option value="2">2 swatches</option>
-            <option value="3">3 swatches</option>
-            <option value="4">4 swatches</option>
-          </select></label>
-          <button type="button" class="outline" id="wada-random">Randomize</button>
-        </div>
-        <p class="sr" id="wada-draw" role="status"></p>
-        <section id="wada-preview" aria-labelledby="wada-preview-title" hidden></section>
-        <div class="wada-results-head">
-          <h3 id="wada-results-title" tabindex="-1">Browse combinations</h3>
-          <p id="wada-results-status" role="status"></p>
-        </div>
-        <div class="wada-grid" id="wada-results"></div>
-        <div class="wada-pages" id="wada-pages" aria-label="Combination pages" role="group">
-          <button type="button" class="outline" id="wada-prev">Previous</button>
-          <span id="wada-page"></span>
-          <button type="button" class="outline" id="wada-next">Next</button>
-        </div>
+    </footer>`);
+  curated.insertAdjacentHTML("beforebegin", `
+    <section class="examples wada" id="wada" aria-labelledby="wada-browse">
+      <h2 id="wada-browse" tabindex="-1">Browse combinations</h2>
+      <section id="wada-preview" aria-labelledby="wada-preview-title" hidden></section>
+      <div class="wada-filters">
+        <label>Search combinations<input id="wada-search" type="search" placeholder="Name or number"></label>
+        <label>Swatch count<select id="wada-count">
+          <option value="0">Any count</option>
+          <option value="2">2 swatches</option>
+          <option value="3">3 swatches</option>
+          <option value="4">4 swatches</option>
+        </select></label>
+        <button type="button" class="outline" id="wada-random">Randomize</button>
       </div>
-    </details>`);
+      <p class="sr" id="wada-draw" role="status"></p>
+      <div class="wada-results-head">
+        <h3 id="wada-results-title" tabindex="-1">Results</h3>
+        <p id="wada-results-status" role="status"></p>
+      </div>
+      <div class="wada-grid" id="wada-results"></div>
+      <div class="wada-pages" id="wada-pages" aria-label="Combination pages" role="group">
+        <button type="button" class="outline" id="wada-prev">Previous</button>
+        <span id="wada-page"></span>
+        <button type="button" class="outline" id="wada-next">Next</button>
+      </div>
+    </section>`);
 
-  const details = document.getElementById("wada") as HTMLDetailsElement;
   const el = <T extends HTMLElement = HTMLElement>(id: string) =>
-    details.querySelector<T>("#wada-" + id)!;
+    document.getElementById("wada-" + id) as T;
+  const featuredGrid = el("featured");
+  const results = el("results");
   const preview = el("preview");
   const retry = el<HTMLButtonElement>("retry");
   const search = el<HTMLInputElement>("search");
@@ -107,7 +121,8 @@ export function mountCollection(
   const random = el<HTMLButtonElement>("random");
   const previous = el<HTMLButtonElement>("prev");
   const next = el<HTMLButtonElement>("next");
-  let collection: Combination[] = [];
+  let collection: Combination[] = namedCombinations;
+  let loaded = false;
   let loading = false;
   let matches: Combination[] = [];
   let page = 0;
@@ -141,10 +156,11 @@ export function mountCollection(
       return;
     }
 
-    const { id, swatches } = selected;
+    const { id, swatches, note } = selected;
     if (tool === "web") assignments = assignWeb(swatches);
     preview.innerHTML = `
-      <h3 id="wada-preview-title" tabindex="-1">Preview combination #${id}</h3>
+      <h3 id="wada-preview-title" tabindex="-1">Preview ${escapeText(previewLabel(id))}</h3>
+      ${note ? `<p class="wada-note">${escapeText(note)}</p>` : ""}
       <div class="wada-preview-body">
         <div><h4>Original swatches</h4>${swatchList(swatches)}</div>
         <div><h4>Proposed roles</h4>
@@ -158,8 +174,14 @@ export function mountCollection(
   function renderResults() {
     const start = page * pageSize;
     const total = Math.ceil(matches.length / pageSize);
-    el("results").innerHTML = matches.slice(start, start + pageSize)
+    const active = document.activeElement;
+    const focused = active instanceof HTMLButtonElement && results.contains(active)
+      ? active.dataset.combination
+      : undefined;
+    results.innerHTML = matches.slice(start, start + pageSize)
       .map((combination) => card(combination, selected?.id)).join("");
+    if (focused)
+      results.querySelector<HTMLButtonElement>(cardSelector(focused))?.focus({ preventScroll: true });
     const status = matches.length
       ? `${start + 1}–${Math.min(start + pageSize, matches.length)} of ${matches.length} combinations`
       : "No matching combinations";
@@ -173,34 +195,32 @@ export function mountCollection(
   }
 
   function show(combination: Combination) {
-    if (selected === combination) return;
+    if (selected?.id === combination.id) return;
     selected = combination;
     wall = 0;
     secondary = 1;
     renderPreview();
-    for (const button of details.querySelectorAll<HTMLButtonElement>("[data-combination]")) {
-      button.setAttribute(
-        "aria-pressed",
-        String(Number(button.dataset.combination) === combination.id),
-      );
+    for (const grid of [featuredGrid, results]) {
+      grid.querySelector('[aria-pressed="true"]')?.setAttribute("aria-pressed", "false");
+      grid.querySelector(cardSelector(combination.id))?.setAttribute("aria-pressed", "true");
     }
   }
 
-  function filter() {
+  function filter(clearSelection = false) {
     matches = matchingCombinations(collection, Number(count.value), search.value);
     page = 0;
-    if (selected && !matches.includes(selected)) {
+    if (clearSelection && selected && !matches.some(({ id }) => id === selected?.id)) {
       selected = undefined;
       renderPreview();
-      el("featured").querySelector('[aria-pressed="true"]')?.setAttribute("aria-pressed", "false");
+      featuredGrid.querySelector('[aria-pressed="true"]')?.setAttribute("aria-pressed", "false");
     }
     renderResults();
   }
 
   async function load() {
-    if (loading || collection.length) return;
+    if (loading || loaded) return;
     loading = true;
-    el("load").textContent = "Loading combinations…";
+    el("load").textContent = "Loading more combinations…";
     retry.setAttribute("aria-disabled", "true");
     try {
       const response = await fetch(
@@ -208,15 +228,14 @@ export function mountCollection(
         retry.hidden ? undefined : { cache: "reload" },
       );
       if (!response.ok) throw new Error("Could not load collection");
-      collection = unpackCollection(await response.json());
-      el("featured").innerHTML = featuredIds.map((id) => card(collection[id - 1])).join("");
+      collection = [...namedCombinations, ...unpackCollection(await response.json())];
       filter();
-      el("content").hidden = false;
+      loaded = true;
       if (document.activeElement === retry) search.focus();
       retry.hidden = true;
       el("load").textContent = "";
     } catch {
-      el("load").textContent = "The combinations could not be loaded.";
+      el("load").textContent = "The Wada combinations could not be loaded.";
       retry.hidden = false;
     } finally {
       retry.removeAttribute("aria-disabled");
@@ -224,19 +243,17 @@ export function mountCollection(
     }
   }
 
-  details.addEventListener("toggle", () => {
-    if (details.open && retry.hidden) void load();
-  });
   retry.addEventListener("click", () => void load());
-  search.addEventListener("input", filter);
-  count.addEventListener("change", filter);
+  search.addEventListener("input", () => filter(true));
+  count.addEventListener("change", () => filter(true));
   random.addEventListener("click", () => {
     const combination = randomCombination(matches, selected?.id);
     if (!combination) return;
     page = Math.floor(matches.indexOf(combination) / pageSize);
     renderResults();
     show(combination);
-    el("draw").textContent = `Previewing combination #${combination.id}.`;
+    preview.scrollIntoView({ block: "nearest" });
+    el("draw").textContent = `Previewing ${previewLabel(combination.id)}.`;
   });
   function turnPage(offset: number) {
     page += offset;
@@ -245,18 +262,23 @@ export function mountCollection(
   }
   previous.addEventListener("click", () => turnPage(-1));
   next.addEventListener("click", () => turnPage(1));
-  details.addEventListener("click", (event) => {
-    const button = (event.target as Element).closest("button");
-    if (button?.dataset.combination) {
-      el("draw").textContent = "";
-      show(collection[Number(button.dataset.combination) - 1]);
-      el("preview-title").focus();
-    } else if (button?.id === "wada-swap") {
-      [wall, secondary] = [secondary, wall];
-      updatePaintRoles();
-    } else if (button?.id === "wada-apply" && selected) {
+  function selectCard(event: MouseEvent) {
+    const button = (event.target as Element).closest<HTMLButtonElement>("[data-combination]");
+    if (!button) return;
+    const id = button.dataset.combination;
+    const combination = collection.find((item) => String(item.id) === id) ??
+      featured.find((item) => String(item.id) === id);
+    if (!combination) return;
+    el("draw").textContent = "";
+    show(combination);
+    preview.scrollIntoView({ block: "start" });
+    el("preview-title").focus({ preventScroll: true });
+  }
+  featuredGrid.addEventListener("click", selectCard);
+  results.addEventListener("click", selectCard);
+  preview.addEventListener("click", (event) => {
+    if ((event.target as Element).closest("#wada-apply") && selected)
       apply(selected.id, assignments);
-    }
   });
   preview.addEventListener("change", (event) => {
     const select = event.target as HTMLSelectElement;
@@ -264,6 +286,8 @@ export function mountCollection(
     if (select.id === "wada-secondary") secondary = Number(select.value);
     updatePaintRoles();
   });
+  filter();
+  void load();
   return {
     setTarget(pair: Pair) {
       if (target === pair) return;

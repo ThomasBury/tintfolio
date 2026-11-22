@@ -11,21 +11,16 @@
     format("woff2");
   font-display: swap;
 }
-@font-face {
-  font-family: Instrument Serif;
-  src: url("@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2")
-    format("woff2");
-  font-style: italic;
-  font-display: swap;
-}
 :root {
   color-scheme: light;
-  --ink: #30352c;
-  --muted: #626757;
-  --line: #d8d9cd;
-  --green: #44583e;
-  --paper: #f7f7f0;
+  --ink: #30312d;
+  --muted: #61625a;
+  --line: #d8d7cf;
+  --green: #454e42;
+  --paper: #f7f6f2;
   --card: #fffefa;
+  --selected: #eeeee8;
+  --selected-edge: #74766d;
   font:
     15px/1.45 "DM Sans",
     sans-serif;
@@ -79,7 +74,7 @@ header {
   background: var(--card);
 }
 .top {
-  height: 72px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -87,7 +82,7 @@ header {
 }
 .brand {
   font:
-    35px/1 "Instrument Serif",
+    31px/1 "Instrument Serif",
     Georgia,
     serif;
   letter-spacing: -1.2px;
@@ -98,10 +93,13 @@ header {
   text-decoration: none;
   min-height: 44px;
 }
-nav,
+nav {
+  display: flex;
+  gap: 4px;
+}
 .segmented {
   display: flex;
-  background: #eeefe7;
+  background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 3px;
@@ -110,33 +108,44 @@ nav,
 nav a,
 .segmented button {
   min-height: 44px;
+  border: 1px solid transparent;
   border-radius: 7px;
   display: grid;
   place-items: center;
-  color: #545a4c;
+  color: var(--muted);
   font-size: 13px;
   font-weight: 570;
   text-decoration: none;
   padding: 0 17px;
 }
-nav a[aria-current] {
-  background: var(--green);
-  color: white;
+nav a[aria-current],
+.segmented [aria-pressed="true"],
+.tile[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--selected-edge);
+  background: var(--selected);
 }
 .intro {
-  margin: 32px 0 26px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  margin: 22px 0 18px;
 }
 .intro h1 {
   font:
-    clamp(45px, 4.9vw, 76px) / 1.02 "Instrument Serif",
+    2.75rem/1.05 "Instrument Serif",
     Georgia,
     serif;
   letter-spacing: -0.035em;
-  margin: 0 0 9px;
+  margin: 0;
 }
-.intro em {
-  color: #5e7153;
-  font-weight: 400;
+.intro p {
+  grid-column: 1 / -1;
+}
+.palette-link {
+  grid-column: 2;
+  grid-row: 1;
 }
 .intro p,
 .sample {
@@ -201,7 +210,7 @@ select {
   font-size: 13px;
 }
 #picture {
-  background: #e8e5d9;
+  background: var(--selected);
 }
 #room {
   width: 100%;
@@ -270,11 +279,6 @@ select {
   white-space: nowrap;
   padding: 0 5px;
 }
-.segmented [aria-pressed="true"] {
-  color: var(--ink);
-  background: #fffefa;
-  box-shadow: 0 1px 4px #343b2c26;
-}
 .pair-select {
   display: flex;
   align-items: center;
@@ -291,11 +295,22 @@ select {
   text-transform: uppercase;
   color: var(--muted);
 }
+.palette-colours,
 #role-strip {
   display: flex;
   gap: 5px;
-  flex-wrap: wrap;
+}
+.palette-colours {
+  align-items: start;
   margin: 8px 0 17px;
+}
+#role-strip {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+#swap-colours {
+  flex: none;
+  padding-inline: 7px;
 }
 .tile {
   display: flex;
@@ -316,14 +331,10 @@ select {
   border-radius: 4px;
   border: 1px solid #0001;
 }
-.tile[aria-pressed="true"] {
-  border-color: #78876b;
-  background: #f0f2e9;
-}
 .tile .icon {
   width: 13px;
   height: 13px;
-  color: #42563b;
+  color: var(--green);
 }
 .field-label {
   display: flex;
@@ -396,7 +407,7 @@ select {
   flex: 1;
   border: 1px solid #cdd0c3;
   border-radius: 7px;
-  background: #fffefa;
+  background: var(--card);
   font:
     14px ui-monospace,
     monospace;
@@ -431,7 +442,7 @@ select {
   flex-wrap: wrap;
   gap: 7px;
   padding: 15px 20px;
-  background: #f5f5ed;
+  background: var(--paper);
   border-top: 1px solid var(--line);
 }
 .actions .icon,
@@ -499,13 +510,14 @@ select {
   color: var(--green);
 }
 .examples {
-  margin: 28px 0 40px;
+  margin: 28px 0 18px;
   border-top: 1px solid var(--line);
   padding-top: 18px;
 }
-.examples h2 {
+.examples h2,
+.wada-featured h2 {
   font:
-    34px/1.2 "Instrument Serif",
+    1.75rem/1.2 "Instrument Serif",
     Georgia,
     serif;
   margin: 0 0 14px;
@@ -684,8 +696,7 @@ select {
     height: 28px;
   }
   nav {
-    padding: 1px;
-    gap: 0;
+    gap: 2px;
   }
   nav a {
     font-size: 11px;
@@ -695,8 +706,7 @@ select {
     margin: 14px 0;
   }
   .intro h1 {
-    font-size: 39px;
-    margin-bottom: 4px;
+    font-size: 2rem;
   }
   .intro p {
     font-size: 13px;
@@ -735,6 +745,15 @@ select {
     top: 0;
     z-index: 1;
   }
+  [data-tool="paint"] .preview-card {
+    border-top: 1px solid var(--line);
+    border-radius: 10px 10px 0 0;
+  }
+  [data-tool="paint"] .modes {
+    order: 2;
+    border-top: 0;
+    border-radius: 0;
+  }
   .preview-head {
     min-height: 44px;
     padding: 0 9px;
@@ -765,10 +784,16 @@ select {
     border-top: 0;
     padding: 8px 10px;
   }
-  #role-strip {
+  .palette-colours {
     margin: 0 0 7px;
+  }
+  .palette-colours,
+  #role-strip {
     gap: 3px;
+  }
+  #role-strip {
     flex-wrap: nowrap;
+    flex: 1;
   }
   .tile {
     min-width: 0;
@@ -822,8 +847,9 @@ select {
     grid-template-columns: 1fr;
     gap: 8px;
   }
-  .examples h2 {
-    font-size: 28px;
+  .examples h2,
+  .wada-featured h2 {
+    font-size: 1.5rem;
   }
   .art {
     width: 24%;
@@ -877,38 +903,50 @@ select {
   .editing :is(input, button) {
     scroll-margin-top: 190px;
   }
+  [data-tool="paint"] :is(.modes, .editing) :is(input, button, select) {
+    scroll-margin-top: calc(clamp(116px, 21vh, 170px) + 110px);
+  }
 }
 @media (max-height: 490px) and (max-width: 700px) {
   .preview-card {
     position: static;
   }
-  .editing :is(input, button) {
+  .editing :is(input, button),
+  [data-tool="paint"] :is(.modes, .editing) :is(input, button, select) {
     scroll-margin-top: 8px;
   }
 }
 
-.wada {
-  margin-bottom: 40px;
-  padding-top: 12px;
+.wada-featured {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
-.wada [hidden] {
+.wada [hidden],
+.wada-featured [hidden] {
   display: none;
 }
-.wada summary {
-  cursor: pointer;
+.wada-featured-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  margin-top: 4px;
+}
+.wada-featured-actions a,
+.palette-link {
+  display: inline-flex;
+  align-items: center;
   min-height: 44px;
   color: var(--green);
+  font-size: 13px;
+  font-weight: 650;
+  text-underline-offset: 3px;
 }
-.wada summary h2 {
-  display: inline;
-  color: var(--ink);
-  margin: 0;
-  margin-inline-start: 6px;
-  line-height: 44px;
-}
-.wada summary:focus-visible {
-  outline: 3px solid #80522c;
-  outline-offset: 3px;
+#wada-browse,
+#wada-featured-title,
+#wada-preview {
+  scroll-margin-top: 8px;
 }
 .wada h3,
 .wada h4 {
@@ -924,7 +962,7 @@ select {
   font-weight: 650;
 }
 .wada-credit {
-  margin: 4px 0 18px;
+  margin: 0 0 28px;
   color: var(--muted);
   font-size: 14px;
   max-width: 68ch;
@@ -935,9 +973,8 @@ select {
 }
 #wada-load {
   margin: 0;
-}
-#wada-load:not(:empty) {
-  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 13px;
 }
 .wada-grid {
   display: grid;
@@ -946,11 +983,13 @@ select {
 }
 #wada-featured {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 46rem;
 }
 .wada-card {
   display: grid;
   gap: 6px;
   min-width: 0;
+  min-height: 44px;
   padding: 6px 6px 8px;
   border-radius: 8px;
   border: 1px solid var(--line);
@@ -974,9 +1013,6 @@ select {
   border: 1px solid var(--line);
   border-radius: 4px;
 }
-#wada-featured .wada-band {
-  min-height: 48px;
-}
 .wada-band .chip {
   flex: 1;
   height: auto;
@@ -988,7 +1024,7 @@ select {
   align-items: end;
   flex-wrap: wrap;
   gap: 8px;
-  margin-block: 20px 14px;
+  margin-bottom: 14px;
 }
 .wada-filters label,
 .wada-paint-roles label {
@@ -1009,7 +1045,7 @@ select {
   background: var(--card);
 }
 .wada button:disabled,
-.wada button[aria-disabled="true"] {
+.wada-featured button[aria-disabled="true"] {
   opacity: .55;
   cursor: default;
 }
@@ -1043,6 +1079,11 @@ select {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
+}
+.wada-note {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 14px;
 }
 .wada-preview-body {
   display: grid;
@@ -1090,6 +1131,9 @@ select {
   text-overflow: ellipsis;
 }
 @media (max-width: 540px) {
+  .wada-featured {
+    margin-top: 24px;
+  }
   .wada-preview-body {
     grid-template-columns: 1fr;
   }

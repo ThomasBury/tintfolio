@@ -49,12 +49,14 @@ export function matchingCombinations(
   query: string,
 ) {
   const term = query.trim().toLowerCase();
-  const byId = /^#?\s*[0-9]+$/.test(term);
+  const digits = term.replace(/^#\s*/, "");
+  const byId = /^[0-9]+$/.test(digits);
+  const numericHex = digits.length === 6 ? "#" + digits : "";
   return collection.filter(
     ({ id, swatches }) =>
       (!count || swatches.length === count) &&
       (byId
-        ? id === Number(term.replace("#", ""))
+        ? id === Number(digits) || swatches.some(({ hex }) => hex.toLowerCase() === numericHex)
         : (typeof id === "string" && id.toLowerCase().includes(term)) ||
           swatches.some(({ name, code, hex }) =>
             name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term))),

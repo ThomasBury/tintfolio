@@ -59,7 +59,7 @@ export function mountCollection(
 ) {
   library.innerHTML = `
     <div class="library-search">
-      <label><span>Search palettes</span><input id="wada-search" type="search" placeholder="Name, pigment or #48"></label>
+      <label><span>Search palettes</span><input id="wada-search" type="search" placeholder="Name or #48"></label>
       <button type="button" class="outline" id="wada-filters-toggle" aria-expanded="false" aria-controls="wada-filters">Filters</button>
       <button type="button" class="outline" id="wada-random">Randomize</button>
     </div>

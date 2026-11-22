@@ -3,13 +3,20 @@ import examples from "./examples.json" with { type: "json" };
 export type Tool = "paint" | "web";
 export type Room = "living" | "bedroom" | "kitchen";
 export type Pair = "ceiling" | "feature";
+export const lightingPresets = {
+  north: "North-facing daylight",
+  golden: "Golden hour",
+  evening: "Warm evening (2700 K)",
+} as const;
+export type Lighting = keyof typeof lightingPresets;
+export type Theme = "light" | "dark";
 export const labels = {
   wall: "Main wall",
   ceiling: "Ceiling",
   feature: "Feature wall",
   trim: "Trim",
   background: "Background",
-  text: "Text",
+  text: "Primary Text",
   accent: "Accent",
   onAccent: "Text on accent",
 } as const;
@@ -27,6 +34,8 @@ export interface Design {
   pair: Pair;
   colours: Record<Role, string>;
   floor?: string;
+  lighting: Lighting;
+  theme: Theme;
 }
 export const catalogue = examples;
 export function example(tool: Tool, index = 0, room: Room = "living"): Design {
@@ -34,6 +43,8 @@ export function example(tool: Tool, index = 0, room: Room = "living"): Design {
   return {
     mode: item.mode,
     room,
+    lighting: "north",
+    theme: "light",
     pair: "pair" in item && item.pair === "feature" ? "feature" : "ceiling",
     colours: {
       wall: "#A9B39E",
@@ -42,7 +53,7 @@ export function example(tool: Tool, index = 0, room: Room = "living"): Design {
       background: "#F3EEDF",
       text: "#353C30",
       accent: "#B59A6B",
-      onAccent: "#FFFFFF",
+      onAccent: "#000000",
       ...item.colours,
     },
   };
@@ -83,7 +94,8 @@ export function shareParams(tool: Tool, d: Design) {
     p.set("room", d.room);
     if (d.mode === "pair") p.set("pair", d.pair);
     if (d.floor) p.set("floor", d.floor.slice(1));
-  }
+    p.set("lighting", d.lighting);
+  } else p.set("theme", d.theme);
   for (const r of editable(d)) p.set(r, d.colours[r].slice(1));
   return p;
 }
@@ -96,6 +108,9 @@ export function decode(tool: Tool, p: URLSearchParams): Design | null {
     return null;
   d.mode = mode;
   if (tool === "paint") {
+    const lighting = p.get("lighting") ?? d.lighting;
+    if (!Object.hasOwn(lightingPresets, lighting)) return null;
+    d.lighting = lighting as Lighting;
     const room = p.get("room") as Room;
     if (!Object.hasOwn(rooms, room)) return null;
     d.room = room;
@@ -109,6 +124,10 @@ export function decode(tool: Tool, p: URLSearchParams): Design | null {
       if (!floor) return null;
       d.floor = floor;
     }
+  } else {
+    const theme = p.get("theme") ?? d.theme;
+    if (theme !== "light" && theme !== "dark") return null;
+    d.theme = theme;
   }
   for (const r of editable(d)) {
     const value = hex(p.get(r) || "");
@@ -124,12 +143,17 @@ export function decode(tool: Tool, p: URLSearchParams): Design | null {
     return null;
   return d;
 }
-export function startDesign(tool: Tool) {
+function sessionKey(tool: Tool, preset?: string) {
+  return "tintfolio-" + tool + (preset ? location.pathname : "");
+}
+
+export function startDesign(tool: Tool, preset?: string) {
+  const fallback = (preset && decode(tool, new URLSearchParams(preset))) || example(tool);
   const search = location.search;
   if (search) {
     const design = decode(tool, new URLSearchParams(search));
     return {
-      design: design ?? example(tool),
+      design: design ?? fallback,
       notice: design
         ? ""
         : "This design link is invalid. The starting palette is open.",
@@ -137,7 +161,7 @@ export function startDesign(tool: Tool) {
   }
   try {
     const saved = JSON.parse(
-      sessionStorage.getItem("tintfolio-" + tool) || "null",
+      sessionStorage.getItem(sessionKey(tool, preset)) || "null",
     );
     if (saved) {
       const d = decode(tool, new URLSearchParams(saved.active));
@@ -159,12 +183,12 @@ export function startDesign(tool: Tool) {
   } catch {
     /* Storage is optional. */
   }
-  return { design: example(tool), notice: "" };
+  return { design: fallback, notice: "" };
 }
-export function save(tool: Tool, d: Design) {
+export function save(tool: Tool, d: Design, preset?: string) {
   try {
     sessionStorage.setItem(
-      "tintfolio-" + tool,
+      sessionKey(tool, preset),
       JSON.stringify({
         active: shareParams(tool, d).toString(),
         colours: d.colours,

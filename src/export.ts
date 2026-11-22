@@ -1,17 +1,47 @@
-import { labels, palette, type Design } from "./design.ts";
-export function css(d: Design) {
-  return (
-    ":root {\n" +
-    palette(d)
-      .map(
-        ([r, v]) =>
-          "  --" + (r === "onAccent" ? "text-on-accent" : r) + ": " + v + ";",
-      )
-      .join("\n") +
-    "\n}"
-  );
+import { oklch, rgb } from "culori";
+import { defaultFloor, labels, lightingPresets, palette, rooms, type Design } from "./design.ts";
+import type { WebTokens } from "./web-preview.ts";
+
+export const formats = {
+  hex: "CSS variables (HEX)",
+  oklch: "CSS variables (OKLCH)",
+  tailwind: "Tailwind v4 @theme",
+  figma: "Figma Variables (JSON)",
+};
+export type ExportFormat = keyof typeof formats;
+
+export function exportTheme(tokens: WebTokens, format: ExportFormat) {
+  const entries = Object.entries(tokens);
+  if (format === "figma") {
+    return JSON.stringify(Object.fromEntries(entries.map(([key, hex]) => {
+      const { r, g, b } = rgb(hex)!;
+      return [key, {
+        $type: "color",
+        $value: { colorSpace: "srgb", components: [r, g, b], alpha: 1, hex },
+      }];
+    })), null, 2) + "\n";
+  }
+  const tailwind = format === "tailwind";
+  const lines = entries.map(([key, hex]) => {
+    const { l, c, h = 0 } = oklch(hex)!;
+    const value = format === "oklch"
+      ? `oklch(${l.toFixed(8)} ${c.toFixed(8)} ${h.toFixed(6)})`
+      : hex;
+    return `  --${tailwind ? "color-" : ""}${key}: ${value};`;
+  });
+  return [tailwind ? "@theme static {" : ":root {", ...lines, "}", ""].join("\n");
 }
+
 export function sheet(d: Design) {
-  const colours = palette(d);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="${110 + colours.length * 72}" viewBox="0 0 600 ${110 + colours.length * 72}" role="img" aria-labelledby="title"><title id="title">Tintfolio colour palette</title><rect width="100%" height="100%" fill="#FAF8F2"/><text x="32" y="55" fill="#292C27" font-family="Georgia,serif" font-size="32">Tintfolio palette</text>${colours.map(([r, v], i) => `<g transform="translate(32 ${82 + i * 72})"><rect width="80" height="52" rx="4" fill="${v}" stroke="#72726A"/><g fill="#292C27" font-family="sans-serif" font-size="19"><text x="108" y="32">${labels[r]}</text><text x="420" y="32">${v}</text></g></g>`).join("")}</svg>`;
+  const sample = (hex: string) =>
+    `<i class="chip" style="--swatch:${hex}" aria-hidden="true"></i> <code>${hex}</code>`;
+  const rows = palette(d).map(([role, hex]) => {
+    const name = role === "wall" && d.mode === "single" ? "Walls" : labels[role];
+    return `<tr><th scope="row">${name}</th><td>${sample(hex)}</td></tr>`;
+  }).join("");
+  return `<h2 id="sheet-title">Paint spec sheet</h2>
+    <p>${rooms[d.room]} · ${lightingPresets[d.lighting]}</p>
+    <table><thead><tr><th scope="col">Painted surface</th><th scope="col">HEX</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="spec-floor"><strong>Existing floor</strong> ${sample(d.floor ?? defaultFloor)}</p>
+    <p>Lighting is approximate. Check a physical paint sample in your room.</p>`;
 }

@@ -128,10 +128,10 @@ function render(focus?: string) {
           .join("")}</select>`
       : ""
   }</div><div id="picture">${preview()}</div><div id="key">${key()}</div>${paint ? floorControl() : ""}</section>
-  <aside class="control-card" aria-label="Colour controls">${modes()}<div class="editing"><div class="eyebrow">Palette colours</div><div id="role-strip" role="group" aria-label="Select a colour to edit" tabindex="-1">${strip()}</div>
+  <aside class="control-card" aria-label="Colour controls">${modes()}<div class="editing"><div class="eyebrow">Palette colours</div><div class="palette-colours"><div id="role-strip" role="group" aria-label="Select a colour to edit" tabindex="-1">${strip()}</div>${paint && d.mode === "pair" ? '<button type="button" id="swap-colours" class="outline">Swap colours</button>' : ""}</div>
   <label class="field-label" for="hex">${editLabel(role)} <span>HEX</span></label><div class="field-row"><label class="picker" title="Pick ${editLabel(role)} colour"><input id="picker" type="color" value="${d.colours[role]}" aria-label="Pick ${editLabel(role)} colour"></label>
   <input id="hex" spellcheck="false" autocomplete="off" autocapitalize="characters" aria-describedby="feedback" value="${d.colours[role]}"><button id="copy" class="outline">${icon("copy")}Copy</button></div><p id="feedback" role="status"></p><div id="advice">${advice()}</div></div>
-  <div class="actions">${paint ? "" : '<button id="css" class="outline">Copy CSS</button>'}<button id="share" class="solid">${icon("share")}Share</button><button id="download" class="outline">${icon("download")}Download palette SVG</button></div></aside>
+  <div class="actions">${paint ? "" : '<button id="css" class="outline">Copy CSS</button>'}<button id="share" class="outline">${icon("share")}Share</button><button id="download" class="outline">${icon("download")}Download palette SVG</button></div></aside>
   ${paint ? `<p class="sample">${icon("info")}${note}</p>` : ""}`;
   collection.setTarget(d.pair);
   if (focus) el(focus)?.focus({ preventScroll: true });
@@ -201,6 +201,13 @@ document.addEventListener("click", (e) => {
   } else if (b.dataset.role) {
     role = b.dataset.role as Role;
     render(b.id);
+  } else if (b.id === "swap-colours" && paint && d.mode === "pair") {
+    const secondary = d.pair;
+    [d.colours.wall, d.colours[secondary]] = [d.colours[secondary], d.colours.wall];
+    undo = null;
+    persist();
+    render(b.id);
+    el("status").textContent = "Colours swapped.";
   } else if (b.dataset.suggest) {
     updateColour(b.dataset.suggest);
     el("undo")?.focus({ preventScroll: true });
@@ -320,7 +327,8 @@ const collection = mountCollection(el("examples").parentElement!, tool, d.pair, 
   const mode = paint ? "pair" : assignments.length === 2 ? "text" : "site";
   const colours = { ...d.colours };
   for (const { role, hex } of assignments) colours[role] = hex;
-  applyDesign({ ...d, mode, colours }, `Sanzo Wada combination #${id} applied.`, true);
+  const name = typeof id === "number" ? `Combination #${id}` : id;
+  applyDesign({ ...d, mode, colours }, `${name} applied.`, true);
 });
 save(tool, d);
 render();

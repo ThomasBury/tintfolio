@@ -40,7 +40,9 @@ Website contrast uses the final sRGB HEX colours and a 4.5:1 minimum for both te
 
 The six starting palettes and their design rationales live in [src/examples.json](src/examples.json).
 
-Both editors load the Sanzo Wada collection when you open it. The bundled data keeps the upstream swatch names, HEX values and swatch order from revision `c142bd0bc8049ea48db4da5eb397981f047e8ef4`. Its swatch table stores each name and HEX once. Each combination row starts with the combination number and lists zero-based indices into that table in upstream order. [Pinned dataset and conversion notes](https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4) · [MIT notice](public/wada-license.txt)
+**Browse palettes** jumps from either editor’s heading to three featured combinations below the editor. The collection starts with 12 named palettes and loads 348 numbered Wada combinations automatically. Search by palette name, colour name, Pantone code, or combination number. [Named palettes](src/named-combinations.json)
+
+The Wada data keeps the upstream swatch names, HEX values and swatch order from revision `c142bd0bc8049ea48db4da5eb397981f047e8ef4`. Its swatch table stores each name and HEX once. Each combination row starts with the combination number and lists zero-based indices into that table in upstream order. [Pinned dataset and conversion notes](https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4) · [MIT notice](public/wada-license.txt)
 
 ## Mobile walkthrough
 
@@ -56,8 +58,8 @@ Local production build, 22 November 2026, Lighthouse 13.6.0 and headless Chrome 
 
 | Route | Three cold LCP runs (ms) | Median LCP | Initial JS, gzip |
 | --- | --- | ---: | ---: |
-| `/paint/` | 1,741 · 1,850 · 1,957 | 1,850 ms | 28,130 bytes |
-| `/web/` | 764 · 1,506 · 1,641 | 1,506 ms | 28,130 bytes |
+| `/paint/` | 1,450 · 1,563 · 1,562 | 1,562 ms | 29,803 bytes |
+| `/web/` | 1,488 · 1,172 · 1,548 | 1,488 ms | 29,803 bytes |
 
 ## Deploy with Cloudflare Pages
 

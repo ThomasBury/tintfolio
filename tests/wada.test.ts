@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { contrast } from "../src/colour.ts";
+import namedCombinations from "../src/named-combinations.json" with { type: "json" };
 import {
   assignWeb,
   matchingCombinations,
@@ -45,7 +46,7 @@ test("random draws give each eligible match one slot and skip the current previe
 });
 
 test("every web assignment minimizes source corrections and passes at full precision", () => {
-  for (const { id, swatches } of collection) {
+  for (const { id, swatches } of [...collection, ...namedCombinations]) {
     const actual = assignWeb(swatches);
     let best: { changes: number; lightness: number; order: Swatch[] } | undefined;
     for (const bg of swatches) {

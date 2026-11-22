@@ -50,7 +50,9 @@ for (const paint of [true, false]) {
       const action = paint
         ? page.getByRole("button", { name: "Mist", exact: true })
         : page.getByRole("button", { name: "Adjust button text" });
-      await action.scrollIntoViewIfNeeded();
+      // Leave room below the action so subpixel rounding at the viewport edge
+      // cannot affect the visibility check.
+      await action.evaluate((button) => button.scrollIntoView({ block: "center" }));
       const target = page.locator(
         paint ? "[data-surface=ceiling]" : "#specimen-button",
       );
@@ -105,14 +107,26 @@ for (const route of ["paint", "web"]) {
   test(route + " collection has reachable controls at 320 pixels", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto("/" + route + "/");
+    const featured = page.locator("#wada-featured button");
+    const browse = page.getByRole("link", { name: "Browse all combinations" });
+    const jump = page.getByRole("link", { name: "Browse palettes", exact: true });
+    const heading = page.getByRole("heading", { name: "Colour combinations", exact: true });
+    await onScreen(page.locator("#picture"));
+    await onScreen(jump);
+    await jump.tap();
+    await onScreen(heading);
+    await expect(featured).toHaveCount(3);
+    for (const card of await featured.all()) await onScreen(card);
+    await onScreen(browse);
+    await browse.tap();
     const collection = page.locator("#wada");
-    await collection.locator("summary").tap();
-    await collection.locator("#wada-featured").getByRole("button", { name: /#344/ }).tap();
+    await onScreen(collection.getByRole("heading", { name: "Browse combinations" }));
+    await featured.getByText("#344", { exact: true }).tap();
     const preview = collection.locator("#wada-preview");
     const apply = preview.getByRole("button", { name: "Apply", exact: true });
-    await expect(preview).toBeVisible();
+    await onScreen(preview.getByRole("heading", { name: "Preview combination #344" }));
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
-    for (const target of await collection.locator("summary, button:visible, select, input").all()) {
+    for (const target of await page.locator(".wada-featured :is(a, button:visible), #wada :is(button:visible, select, input)").all()) {
       const box = await target.boundingBox();
       expect(box!.height).toBeGreaterThanOrEqual(44);
       expect(box!.width).toBeGreaterThanOrEqual(44);
@@ -122,5 +136,14 @@ for (const route of ["paint", "web"]) {
     await onScreen(apply);
     await apply.tap();
     await onScreen(page.locator(route === "paint" ? "#mode-pair" : "#mode-site"));
+    if (route === "paint") {
+      const swap = page.getByRole("button", { name: "Swap colours" });
+      const room = page.locator("#room");
+      const roomBox = (await room.boundingBox())!;
+      expect((await swap.boundingBox())!.y).toBeGreaterThan(roomBox.y + roomBox.height);
+      await swap.tap();
+      await onScreen(swap);
+      await expect(swap).toBeFocused();
+    }
   });
 }

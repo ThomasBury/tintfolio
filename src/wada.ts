@@ -8,10 +8,12 @@ interface CollectionData {
 export interface Swatch {
   name: string;
   hex: string;
+  code?: string;
 }
 export interface Combination {
-  id: number;
+  id: number | string;
   swatches: Swatch[];
+  note?: string;
 }
 export interface Assignment {
   role: Role;
@@ -51,11 +53,13 @@ export function matchingCombinations(
       (!count || swatches.length === count) &&
       (byId
         ? id === Number(term.replace("#", ""))
-        : swatches.some(({ name }) => name.toLowerCase().includes(term))),
+        : (typeof id === "string" && id.toLowerCase().includes(term)) ||
+          swatches.some(({ name, code }) =>
+            name.toLowerCase().includes(term) || code?.toLowerCase().includes(term))),
   );
 }
 
-export function randomCombination(matches: Combination[], current?: number): Combination | undefined {
+export function randomCombination(matches: Combination[], current?: Combination["id"]): Combination | undefined {
   if (!matches.length) return;
   const eligible = matches.length > 1
     ? matches.filter(({ id }) => id !== current)

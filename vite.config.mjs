@@ -1,6 +1,22 @@
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
+
+const { combinations, swatches } = JSON.parse(
+  readFileSync(new URL("./public/wada-combinations.json", import.meta.url), "utf8"),
+);
+const featured = [4, 125, 344].map((number) => {
+  const [id, ...indices] = combinations[number - 1];
+  return {
+    id,
+    swatches: indices.map((index) => {
+      const [name, hex] = swatches[index];
+      return { name, hex };
+    }),
+  };
+});
+
 export default defineConfig({
+  define: { __FEATURED_COMBINATIONS__: featured },
   plugins: [
     {
       name: "social-image-origin",

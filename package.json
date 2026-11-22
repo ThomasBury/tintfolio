@@ -1,0 +1,30 @@
+{
+  "name": "tintfolio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:browser": "playwright test",
+    "measure": "node scripts/measure.mjs"
+  },
+  "dependencies": {
+    "culori": "^4.0.2",
+    "@fontsource-variable/dm-sans": "^5.2.0",
+    "@fontsource/instrument-serif": "^5.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/culori": "^4.0.1",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.0",
+    "lighthouse": "^13.0.0"
+  }
+}

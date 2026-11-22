@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,interactive-widget=resizes-content"
+    />
+    <title>Wall paint studio · Tintfolio</title>
+    <meta
+      name="description"
+      content="Try wall, ceiling and feature colours in three illustrated rooms."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Wall paint studio · Tintfolio" />
+    <meta
+      property="og:description"
+      content="Try wall, ceiling and feature colours in three illustrated rooms."
+    />
+    <meta property="og:image" content="/paint-preview.png" />
+    <meta property="og:image:alt" content="Wall paint studio preview" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/mark.svg" type="image/svg+xml" />
+    <script type="module" src="/src/app.ts"></script>
+  </head>
+  <body data-tool="paint">
+    <a class="skip" href="#studio">Skip to editor</a>
+    <header>
+      <div class="wrap top">
+        <a class="brand" href="/paint/"
+          ><img src="/mark.svg" alt="" width="34" height="34" />Tintfolio</a
+        >
+        <nav aria-label="Colour editors">
+          <a href="/paint/" aria-current="page">Wall paint</a
+          ><a href="/web/">Website colours</a>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap">
+      <div class="intro">
+        <h1>Wall paint <em>studio</em></h1>
+        <p>Explore paint colours in a room and find a palette to take home.</p>
+      </div>
+      <p id="notice" role="status" hidden></p>
+      <div id="studio" tabindex="-1"></div>
+      <section aria-labelledby="examples-title" class="examples">
+        <h2 id="examples-title">Curated palettes</h2>
+        <div id="examples"></div>
+      </section>
+    </main>
+  </body>
+</html>

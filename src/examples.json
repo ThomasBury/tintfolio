@@ -1,0 +1,71 @@
+{
+  "paint": [
+    {
+      "name": "Soft sage",
+      "use": "Everyday living",
+      "reason": "A muted green brings warmth to oak and linen.",
+      "mode": "single",
+      "colours": {
+        "wall": "#A9B39E"
+      }
+    },
+    {
+      "name": "Clay & chalk",
+      "use": "A restful bedroom",
+      "reason": "A chalky ceiling gives warm clay walls a little lift.",
+      "mode": "pair",
+      "pair": "ceiling",
+      "colours": {
+        "wall": "#C78E76",
+        "ceiling": "#F3E5D5"
+      }
+    },
+    {
+      "name": "Coastal blue",
+      "use": "A quiet reading corner",
+      "reason": "A deeper blue feature wall draws the eye across the room.",
+      "mode": "pair",
+      "pair": "feature",
+      "colours": {
+        "wall": "#C3D0D0",
+        "feature": "#657F89"
+      }
+    }
+  ],
+  "web": [
+    {
+      "name": "Paper & ink",
+      "use": "Essays and journals",
+      "reason": "Warm paper softens the contrast of dark olive ink.",
+      "mode": "text",
+      "colours": {
+        "background": "#F3EEDF",
+        "text": "#353C30"
+      }
+    },
+    {
+      "name": "Field notes",
+      "use": "A garden journal",
+      "reason": "A moss-green button anchors a quiet cream page.",
+      "mode": "site",
+      "colours": {
+        "background": "#F1EFDF",
+        "text": "#343F32",
+        "accent": "#4C6447",
+        "onAccent": "#FFFFFF"
+      }
+    },
+    {
+      "name": "Night edition",
+      "use": "An evening arts guide",
+      "reason": "A pale apricot accent picks out actions on deep plum.",
+      "mode": "site",
+      "colours": {
+        "background": "#332C38",
+        "text": "#F9EDE7",
+        "accent": "#ECB393",
+        "onAccent": "#342C35"
+      }
+    }
+  ]
+}

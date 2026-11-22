@@ -15,7 +15,7 @@ export interface Combination {
   swatches: Swatch[];
   note?: string;
   starter?: number;
-  tags?: { mood?: string; era?: string; use?: string[] };
+  tags?: { mood?: string; era?: string; use?: string[]; warmNeutral?: boolean };
 }
 export interface Assignment {
   role: Role;
@@ -49,12 +49,14 @@ export function matchingCombinations(
   query: string,
 ) {
   const term = query.trim().toLowerCase();
-  const byId = /^#?\s*[0-9]+$/.test(term);
+  const digits = term.replace(/^#\s*/, "");
+  const byId = /^[0-9]+$/.test(digits);
+  const numericHex = digits.length === 6 ? "#" + digits : "";
   return collection.filter(
     ({ id, swatches }) =>
       (!count || swatches.length === count) &&
       (byId
-        ? id === Number(term.replace("#", ""))
+        ? id === Number(digits) || swatches.some(({ hex }) => hex.toLowerCase() === numericHex)
         : (typeof id === "string" && id.toLowerCase().includes(term)) ||
           swatches.some(({ name, code, hex }) =>
             name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term))),
@@ -81,7 +83,7 @@ function* orders(swatches: Swatch[]): Generator<Swatch[]> {
   }
 }
 
-export function assignWeb(swatches: Swatch[]): Assignment[] {
+function webOrder(swatches: Swatch[]) {
   let [background, text, accent, buttonText] = swatches;
   let fewestChanges = Infinity;
   let lightestBackground = 0;
@@ -103,6 +105,16 @@ export function assignWeb(swatches: Swatch[]): Assignment[] {
     }
   }
 
+  return [background, text, accent, buttonText];
+}
+
+export function hasSourceContrast({ swatches, starter }: Combination) {
+  const [background, text] = starter === undefined ? webOrder(swatches) : swatches;
+  return passes(contrast(text.hex, background.hex));
+}
+
+export function assignWeb(swatches: Swatch[]): Assignment[] {
+  const [background, text, accent, buttonText] = webOrder(swatches);
   const assignments: Assignment[] = [
     { role: "background", hex: background.hex.toUpperCase(), source: background },
     {

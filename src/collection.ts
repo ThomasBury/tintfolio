@@ -1,19 +1,12 @@
 import { catalogue, editable, example, labels, neutral, type Role, type Tool } from "./design.ts";
 import namedCombinations from "./named-combinations.json" with { type: "json" };
-import { matchingCombinations, randomCombination, unpackCollection, type Combination, type Swatch } from "./wada.ts";
+import { hasSourceContrast, matchingCombinations, randomCombination, unpackCollection, type Combination, type Swatch } from "./wada.ts";
 
 const pageSize = 24;
 declare const __FEATURED_COMBINATIONS__: Combination[];
 const featured = __FEATURED_COMBINATIONS__.map((combination) => ({
   ...combination, tags: { era: "Early Shōwa" },
 }));
-const facets = {
-  mood: ["Mood", ["Calm", "Focused", "Bold"]],
-  era: ["Era", ["Early Shōwa", "Contemporary"]],
-  use: ["Use case", ["Living rooms", "Bedrooms", "Documentation", "Editorial", "Accents"]],
-} as const;
-type Facet = keyof typeof facets;
-
 export const escapeText = (text: string) =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 export const chip = (hex: string) =>
@@ -24,11 +17,11 @@ function starters(tool: Tool): Combination[] {
   const tags = tool === "paint"
     ? [
         { mood: "Calm", use: ["Living rooms"] },
-        { mood: "Calm", use: ["Bedrooms"] },
+        { mood: "Calm", use: ["Bedrooms"], warmNeutral: true },
         { mood: "Calm", use: ["Accents"] },
       ]
     : [
-        { mood: "Focused", use: ["Editorial"] },
+        { mood: "Focused", use: ["Editorial"], warmNeutral: true },
         { mood: "Calm", use: ["Editorial"] },
         { mood: "Bold", use: ["Editorial"] },
       ];
@@ -47,9 +40,8 @@ function card({ id, swatches }: Combination, selected?: Combination["id"]) {
   const codes = swatches.flatMap(({ code }) => code ? [escapeText(code)] : []).join(" · ");
   return `<button type="button" class="wada-card" data-combination="${escapeText(String(id))}" aria-pressed="${selected === id}">
     <span class="wada-band" aria-hidden="true">${swatches.map(({ hex }) => chip(hex)).join("")}</span>
-    <b>${wada ? names : escapeText(id)}</b>
-    <small>${wada ? `Combination #${id} · ${swatches.length} swatches` : names}</small>
-    ${codes ? `<small>${codes}</small>` : ""}
+    <span class="wada-label"><b>${wada ? `Combination #${id}` : escapeText(id)}</b>
+    <small>${names}${codes ? " · " + codes : ""}</small></span>
   </button>`;
 }
 
@@ -59,30 +51,29 @@ function swatchOptions(combination: Combination, value: number, other: number) {
   ).join("");
 }
 
-const select = (id: string, label: string, options: readonly string[]) =>
-  `<label>${label}<select id="wada-${id}"><option value="">Any</option>${options.map((option) =>
-    `<option>${option}</option>`,
-  ).join("")}</select></label>`;
-
 export function mountCollection(
   library: HTMLElement,
   tool: Tool,
-  apply: (combination: Combination, trigger: HTMLButtonElement) => void,
+  apply: (combination: Combination, trigger?: HTMLButtonElement) => void,
+  audition: (combination?: Combination) => void,
 ) {
   library.innerHTML = `
-    <div class="library-head">
-      <h2 id="library-title">Colour combinations</h2>
-      <button type="button" id="undo-palette" class="text-btn" aria-label="Undo palette" disabled>Undo</button>
-    </div>
     <div class="library-search">
-      <label>Search combinations<input id="wada-search" type="search" placeholder="Name, pigment, code or #48"></label>
+      <label><span>Search palettes</span><input id="wada-search" type="search" placeholder="Name or #48"></label>
+      <button type="button" class="outline" id="wada-filters-toggle" aria-expanded="false" aria-controls="wada-filters">Filters</button>
       <button type="button" class="outline" id="wada-random">Randomize</button>
     </div>
-    <div class="library-filters">
-      <label>Swatch count<select id="wada-count">
-        <option value="0">Any</option>${[2, 3, 4].map((count) => `<option value="${count}">${count} swatches</option>`).join("")}
+    <div class="library-filters filters-collapsed" id="wada-filters">
+      <label>Source<select id="wada-source">
+        <option value="">All sources</option><option value="wada">Wada</option><option value="curated">Curated</option>
       </select></label>
-      ${Object.entries(facets).map(([key, [label, options]]) => select(key, label, options)).join("")}
+      <label>Swatch count<select id="wada-count">
+        <option value="0">Any count</option>${[2, 3, 4].map((count) => `<option value="${count}">${count} swatches</option>`).join("")}
+      </select></label>
+      <label>Style<select id="wada-style">
+        <option value="">All styles</option><option value="bold">Bold</option><option value="warm">Warm Neutral</option>
+        ${tool === "web" ? '<option value="contrast">High Contrast</option>' : ""}
+      </select></label>
     </div>
     <div class="library-loading"><p id="wada-load" role="status"></p><button type="button" class="outline" id="wada-retry" hidden>Retry</button></div>
     <p id="wada-results-status" role="status"></p>
@@ -98,13 +89,13 @@ export function mountCollection(
   const el = <T extends HTMLElement = HTMLElement>(id: string) =>
     library.querySelector<T>("#wada-" + id)!;
   const search = el<HTMLInputElement>("search");
+  const source = el<HTMLSelectElement>("source");
   const count = el<HTMLSelectElement>("count");
+  const style = el<HTMLSelectElement>("style");
   const results = el("results");
   const random = el<HTMLButtonElement>("random");
   const more = el<HTMLButtonElement>("more");
   const retry = el<HTMLButtonElement>("retry");
-  const filters = Object.keys(facets).map((facet) =>
-    [facet as Facet, el<HTMLSelectElement>(facet)] as const);
   const recommended = tool === "paint" ? "Nordic Limewash" : "Developer Docs";
   const curated = [
     ...starters(tool), ...namedCombinations.filter(({ id }) => id === recommended),
@@ -135,12 +126,14 @@ export function mountCollection(
   }
 
   function filter() {
-    matches = matchingCombinations(collection, Number(count.value), search.value).filter(({ tags }) =>
-      filters.every(([facet, input]) => {
-        const value = tags?.[facet];
-        return !input.value || (typeof value === "string" ? value === input.value : value?.includes(input.value));
-      }),
-    );
+    audition();
+    matches = matchingCombinations(collection, Number(count.value), search.value).filter((item) => {
+      if (source.value && source.value !== (typeof item.id === "number" ? "wada" : "curated")) return false;
+      if (style.value === "bold") return item.tags?.mood === "Bold";
+      if (style.value === "warm") return item.tags?.warmNeutral;
+      if (style.value === "contrast") return hasSourceContrast(item);
+      return true;
+    });
     const focused = document.activeElement instanceof HTMLButtonElement && results.contains(document.activeElement)
       ? document.activeElement.dataset.combination : undefined;
     results.innerHTML = matches.slice(0, visible).map((item) => card(item, selected)).join("");
@@ -184,13 +177,34 @@ export function mountCollection(
     updateControls();
   }
 
-  function show(combination: Combination, trigger: HTMLButtonElement) {
-    setSelected(combination.id);
-    apply(combination, trigger);
+  function randomize(trigger?: HTMLButtonElement) {
+    const result = randomCombination(matches, selected);
+    if (result) apply(result, trigger);
   }
 
+  function cycle(direction: number) {
+    const wada = matches.filter(({ id }) => typeof id === "number");
+    if (!wada.length) return;
+    const index = wada.findIndex(({ id }) => id === selected);
+    const next = index < 0 ? (direction > 0 ? 0 : wada.length - 1) : (index + direction + wada.length) % wada.length;
+    apply(wada[next]);
+  }
+
+  function cardFrom(target: EventTarget | null) {
+    return target instanceof Element ? target.closest<HTMLButtonElement>("[data-combination]") : null;
+  }
+
+  function combinationFor(button: HTMLButtonElement | null) {
+    return button && matches.find(({ id }) => String(id) === button.dataset.combination);
+  }
+
+  el("filters-toggle").addEventListener("click", (event) => {
+    const button = event.currentTarget as HTMLButtonElement;
+    const collapsed = el("filters").classList.toggle("filters-collapsed");
+    button.setAttribute("aria-expanded", String(!collapsed));
+  });
   search.addEventListener("input", reset);
-  for (const input of [count, ...filters.map(([, input]) => input)]) input.addEventListener("change", reset);
+  for (const input of [source, count, style]) input.addEventListener("change", reset);
   function reset() {
     visible = pageSize;
     filter();
@@ -216,24 +230,32 @@ export function mountCollection(
       else search.focus();
     }
   });
-  random.addEventListener("click", () => {
-    const result = randomCombination(matches, selected);
-    if (result) show(result, random);
-  });
+  random.addEventListener("click", () => randomize(random));
   results.addEventListener("click", (event) => {
-    const button = (event.target as Element).closest<HTMLButtonElement>("[data-combination]");
-    const match = button && matches.find(({ id }) => String(id) === button.dataset.combination);
-    if (match) show(match, button);
+    const button = cardFrom(event.target);
+    const combination = combinationFor(button);
+    if (button && combination) apply(combination, button);
   });
+  for (const type of ["pointerover", "pointerout"] as const) {
+    results.addEventListener(type, (event) => {
+      if (event.pointerType !== "mouse") return;
+      const button = cardFrom(event.target);
+      if (!button || button === cardFrom(event.relatedTarget)) return;
+      const combination = combinationFor(button);
+      audition(type === "pointerover" && combination ? combination : undefined);
+    });
+  }
+  window.addEventListener("blur", () => audition());
 
   filter();
+  void load();
   const observer = new IntersectionObserver(([entry]) => {
     if (!entry.isIntersecting || document.activeElement === more) return;
     if (loaded && !more.hidden) append(false);
     else void load();
   });
   observer.observe(more);
-  return setSelected;
+  return { setSelected, randomize, cycle };
 }
 
 export function assignmentSelect(role: Role, combination: Combination, index: number, other: number, value: string) {

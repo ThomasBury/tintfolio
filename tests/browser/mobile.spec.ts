@@ -15,7 +15,7 @@ for (const route of ["paint", "web"]) {
     await page.goto("/" + route + "/");
     const preview = page.locator("#picture");
     const canvasBefore = await preview.innerHTML();
-    await page.getByLabel("Search combinations").fill("#48");
+    await page.getByLabel("Search palettes").fill("#48");
     const card = page.getByRole("button", { name: /Combination #48/ });
     await card.scrollIntoViewIfNeeded();
     await card.focus();
@@ -23,12 +23,24 @@ for (const route of ["paint", "web"]) {
     await expect(card).toBeFocused();
     await onScreen(card);
     await onScreen(preview);
+    await onScreen(page.locator("#role-strip"));
     expect(await preview.innerHTML()).not.toBe(canvasBefore);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
     const undo = page.getByRole("button", { name: "Undo palette" });
     await undo.press("Space");
     await expect(card).toBeFocused();
     expect(await preview.innerHTML()).toBe(canvasBefore);
+    const toggle = page.getByRole("button", { name: "Toggle palette sheet" });
+    await toggle.tap();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("tab", { name: "Explore" })).toBeHidden();
+    await onScreen(preview);
+    await onScreen(page.locator("#role-strip"));
+    await toggle.tap();
+    await card.tap();
+    await expect(card).toHaveAttribute("aria-pressed", "true");
+    await onScreen(preview);
+    await onScreen(page.locator("#role-strip"));
     for (const control of await page.locator("#studio button:visible, #studio select:visible, #studio input:visible").all()) {
       const box = (await control.boundingBox())!;
       expect(box.height).toBeGreaterThanOrEqual(44);
@@ -39,7 +51,7 @@ for (const route of ["paint", "web"]) {
 
   test(route + " keeps an invalid HEX and its feedback reachable with a short viewport", async ({ page }) => {
     await page.goto("/" + route + "/");
-    await page.getByText("Edit colours", { exact: true }).click();
+    await page.getByRole("tab", { name: "Tune" }).tap();
     await page.setViewportSize({ width: 320, height: 340 });
     const hex = page.locator("#hex");
     await hex.fill("#AB");

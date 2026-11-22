@@ -17,7 +17,9 @@ Open the URL Vite prints. Run `just` to list commands or `just serve 5174` to ch
 
 ## Using the studios
 
-Both editors have one **Colour combinations** library. Search by palette name, pigment, code or Wada number. Filter by swatch count, mood, era or use case. Cards and **Randomize** update the canvas immediately. Use **Undo** in the library to restore the previous design. In Wall paint, use **Swap roles** or open **Room surfaces and swatches** to reassign the selected combination.
+Both editors open on **Explore**. Search presets by name, pigment, code, HEX or Wada number, or filter by source, swatch count and style. **High Contrast** in Website colours finds palettes whose assigned source text and background already meet 4.5:1. Click or tap a preset to apply it. On a desktop, hover to audition it and move away to return to the active design. **Randomize** uses the current filters, and **Undo** restores the previous palette.
+
+Select a canvas surface or an active swatch to open **Tune**. Edit the HEX, lightness or warmth, see Paint suggestions or Website contrast, and lock any swatches you want to carry into the next preset. With focus on the workspace itself, press Space to randomize, S to swap roles, or Left and Right to cycle through the filtered Wada presets. On a phone you can collapse the palette sheet while you assess the preview.
 
 Each editor remembers the last design in the browser tab. A valid share URL takes precedence and includes the active colours, lighting or theme. **Saved swatches** stores up to four designs per editor in the browser for comparison and restore.
 
@@ -26,7 +28,7 @@ Each editor remembers the last design in the browser tab. A valid share URL take
 
 Paint suggestions adjust OKLCH lightness and chroma, then map each suggestion into sRGB before checking for duplicates. Web contrast also uses the final sRGB values. It checks body and large text against AA and AAA and required borders and icons against 3:1 AA. Pass decisions use the full ratio. For example, `#777773` on white displays 4.50:1 and fails body AA. [W3C text contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) · [W3C non-text contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)
 
-The 348 numbered palettes keep Sanzo Wada’s swatch names, HEX values and swatch order from upstream revision `c142bd0bc8049ea48db4da5eb397981f047e8ef4`. Mood and use-case filters use reviewed tags on curated palettes. [Starting palettes](src/examples.json) · [Named palettes](src/named-combinations.json) · [Wada dataset](https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4) · [MIT notice](public/wada-license.txt)
+The 348 numbered palettes keep Sanzo Wada’s swatch names, HEX values and swatch order from upstream revision `c142bd0bc8049ea48db4da5eb397981f047e8ef4`. Bold and Warm Neutral use reviewed tags on curated palettes. [Starting palettes](src/examples.json) · [Named palettes](src/named-combinations.json) · [Wada dataset](https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4) · [MIT notice](public/wada-license.txt)
 
 ## Verify a release
 

@@ -53,7 +53,7 @@ function card({ id, swatches }: Combination, selected?: Combination["id"]) {
   </button>`;
 }
 
-export function swatchOptions(combination: Combination, value: number, other: number) {
+function swatchOptions(combination: Combination, value: number, other: number) {
   return combination.swatches.map(({ name, hex }, index) =>
     `<option value="${index}" ${index === value ? "selected" : ""} ${index === other ? "disabled" : ""}>${escapeText(name)} · ${hex.toUpperCase()}</option>`,
   ).join("");
@@ -236,6 +236,7 @@ export function mountCollection(
   return setSelected;
 }
 
-export function assignmentSelect(role: Role, combination: Combination, index: number, other: number) {
-  return `<label>${labels[role]}<select id="swatch-${role}" data-swatch-role="${role}" aria-label="${labels[role]}">${swatchOptions(combination, index, other)}</select></label>`;
+export function assignmentSelect(role: Role, combination: Combination, index: number, other: number, value: string) {
+  const custom = index < 0 ? `<option value="" selected disabled>Custom · ${value}</option>` : "";
+  return `<label>${labels[role]}<select id="swatch-${role}" data-swatch-role="${role}" aria-label="${labels[role]}">${custom}${swatchOptions(combination, index, other)}</select></label>`;
 }

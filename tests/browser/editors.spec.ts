@@ -86,6 +86,19 @@ test("paint reassigns and swaps roles on the canvas, and prints its surface colo
   await expect(dialog.getByRole("table")).toBeVisible();
 });
 
+test("manual paint edits are reflected in the canvas swatch controls", async ({ page }) => {
+  await page.goto("/paint/");
+  await (await find(page, "#344")).click();
+  await page.getByText("Room surfaces and swatches", { exact: true }).click();
+  await page.getByText("Edit colours", { exact: true }).click();
+  await page.locator("#hex").fill("#123456");
+  const wall = page.getByLabel("Main wall", { exact: true });
+  await expect(wall.locator("option:checked")).toHaveText("Custom · #123456");
+  await wall.selectOption("2");
+  await expect(wall).toHaveValue("2");
+  await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#A36AA5"));
+});
+
 test("failed library load leaves curated palettes usable and retry keeps keyboard focus", async ({ page }) => {
   let attempts = 0;
   await page.route("**/wada-combinations.json", (route) => ++attempts === 1 ? route.abort() : route.continue());

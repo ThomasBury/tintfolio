@@ -124,12 +124,23 @@ function selectOptions<T extends string>(options: Record<T, string>, current: T)
   ).join("");
 }
 
+function paintSwatches() {
+  if (!selected || d.mode !== "pair") return "";
+  const { combination, wall, secondary } = selected;
+  const currentIndex = (index: number, target: Role) =>
+    combination.swatches[index].hex.toUpperCase() === d.colours[target] ? index : -1;
+  const wallIndex = currentIndex(wall, "wall");
+  const secondaryIndex = currentIndex(secondary, d.pair);
+  return assignmentSelect("wall", combination, wallIndex, secondaryIndex, d.colours.wall) +
+    assignmentSelect(d.pair, combination, secondaryIndex, wallIndex, d.colours[d.pair]);
+}
+
 function paintTools(open: boolean) {
   return `<details id="canvas-options" ${open ? "open" : ""}>
     <summary>Room surfaces${selected && d.mode === "pair" ? " and swatches" : ""}</summary>
     <div class="canvas-fields">
       ${d.mode === "pair" ? `<label>Surfaces<select id="pair">${selectOptions({ ceiling: "Wall + ceiling", feature: "Main wall + feature wall" }, d.pair)}</select></label>` : ""}
-      ${selected && d.mode === "pair" ? `<div class="swatch-fields">${assignmentSelect("wall", selected.combination, selected.wall, selected.secondary)}${assignmentSelect(d.pair, selected.combination, selected.secondary, selected.wall)}</div>` : ""}
+      ${selected && d.mode === "pair" ? `<div class="swatch-fields" id="swatch-fields">${paintSwatches()}</div>` : ""}
       <div class="floor-control"><label>Existing floor <span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button type="button" id="reset-floor" class="outline" ${d.floor ? "" : "disabled"}>Reset floor</button></div>
       <div id="canvas-notes"></div>
     </div></details>`;
@@ -196,6 +207,8 @@ function updateColour(value: string, typing = false) {
   if (!paint) el("key").innerHTML = key();
   el("role-strip").innerHTML = strip();
   el("advice").innerHTML = advice();
+  const swatches = document.getElementById("swatch-fields");
+  if (swatches) swatches.innerHTML = paintSwatches();
   updateCanvasNotes();
   el<HTMLInputElement>("picker").value = value;
   if (!typing) el<HTMLInputElement>("hex").value = value;

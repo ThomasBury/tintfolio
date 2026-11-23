@@ -55,6 +55,8 @@ const pairs = [
   ["Button fill", "accent", "surface", "ui"],
   ["Input border", "border", "surface", "ui"],
   ["Alert icon", "accent", "surface", "ui"],
+  ["Latest activity bar", "accent", "surface", "ui"],
+  ["View report text", "accent", "surface", "text"],
 ] as const;
 
 export function contrastResults(tokens: WebTokens) {
@@ -68,14 +70,22 @@ export function contrastResults(tokens: WebTokens) {
 
 export function dashboard(tokens: WebTokens) {
   const style = Object.entries(tokens).map(([key, value]) => `--${key}:${value}`).join(";");
+  const projectsByWeek = [4, 5, 6, 9];
+  const projectsThisMonth = projectsByWeek.reduce((total, count) => total + count, 0);
   return `<article id="specimen" data-canvas-role="background" style="${style}" aria-label="Sample website">
     <div class="dashboard-heading"><h3 data-canvas-role="text">Workspace</h3><p data-canvas-role="text">Manage your team and plan.</p></div>
     <div class="dashboard-grid">
       <section class="dashboard-card" aria-label="Dashboard card">
         <h4 data-canvas-role="text">Activity</h4>
-        <p class="dashboard-metric">24 <span class="dashboard-badge">Active</span></p>
+        <p class="dashboard-metric">${projectsThisMonth} <span class="dashboard-badge">Active</span></p>
         <p class="dashboard-muted">Projects this month</p>
-        <div class="dashboard-alert"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 5v3m0 2v1" stroke="currentColor" stroke-width="2"/></svg><span>Usage report is ready</span></div>
+        <ul class="dashboard-chart" role="list" aria-label="Projects per week">
+          ${projectsByWeek.map((count, index) => `<li><span>${count}</span> <span class="dashboard-bar" style="--projects:${count}" aria-hidden="true"></span> <span>Wk ${index + 1}</span></li>`).join("")}
+        </ul>
+        <div class="dashboard-alert">
+          <span class="dashboard-alert-message"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 5v3m0 2v1" stroke="currentColor" stroke-width="2"/></svg>Usage report is ready</span>
+          <button type="button" class="dashboard-report" data-canvas-role="accent">View report</button>
+        </div>
       </section>
       <section class="dashboard-card" aria-label="Pricing and inputs">
         <h4 data-canvas-role="text">Plans</h4>

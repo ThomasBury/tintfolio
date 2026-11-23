@@ -53,9 +53,9 @@ test("combination #48 applies on the sticky room, preserves room and floor, and 
 
 test("paint reassigns and swaps roles on the canvas, and prints its surface colours", async ({ page }) => {
   await page.goto("/paint/?mode=pair&room=kitchen&pair=feature&floor=57616B&wall=123456&feature=998877");
+  const canvas = page.getByRole("region", { name: "Room surfaces" });
+  await expect(canvas.getByLabel("Surfaces", { exact: true })).toHaveValue("feature");
   await (await find(page, "#344")).click();
-  await page.getByText("Room surfaces and swatches", { exact: true }).click();
-  const canvas = page.locator("#preview-card");
   const wall = canvas.getByLabel("Main wall", { exact: true });
   const secondary = canvas.getByLabel("Feature wall", { exact: true });
   await expect(wall).toHaveValue("0");
@@ -89,7 +89,6 @@ test("paint reassigns and swaps roles on the canvas, and prints its surface colo
 test("manual paint edits are reflected in the canvas swatch controls", async ({ page }) => {
   await page.goto("/paint/");
   await (await find(page, "#344")).click();
-  await page.getByText("Room surfaces and swatches", { exact: true }).click();
   await page.getByRole("tab", { name: "Tune" }).click();
   await page.locator("#hex").fill("#123456");
   const wall = page.getByLabel("Main wall", { exact: true });
@@ -184,6 +183,18 @@ test("website shows adjusted and added swatches, reports rendered contrast, and 
     await expect(surface).toHaveCSS("background-color", rgb(properties["--surface"]));
     await expect(input).toHaveCSS("border-top-color", rgb(properties["--border"]));
     await expect(button).toHaveCSS("background-color", rgb(properties["--accent"]));
+    const bars = surface.locator(".dashboard-bar");
+    for (const bar of (await bars.all()).slice(0, 3)) {
+      await expect(bar).toHaveCSS("background-color", rgb(properties["--muted-text"]));
+    }
+    const report = surface.getByRole("button", { name: "View report" });
+    await expect(bars.last()).toHaveCSS("background-color", rgb(properties["--accent"]));
+    await expect(report).toHaveCSS("color", rgb(properties["--accent"]));
+    const cardColour = await surface.evaluate((node) => getComputedStyle(node).backgroundColor);
+    const chartContrast = contrast(await bars.last().evaluate((node) => getComputedStyle(node).backgroundColor), cardColour);
+    const reportContrast = contrast(await report.evaluate((node) => getComputedStyle(node).color), cardColour);
+    await expect(page.getByRole("row", { name: `Latest activity bar ${chartContrast.toFixed(2)}:1 ${chartContrast >= 3 ? "Pass" : "Fail"} —` })).toBeVisible();
+    await expect(page.getByRole("row", { name: `View report text ${reportContrast.toFixed(2)}:1 ${reportContrast >= 4.5 ? "Pass" : "Fail"} ${reportContrast >= 7 ? "Pass" : "Fail"}` })).toBeVisible();
     const ratio = contrast(properties["--primary-text"], properties["--background"]);
     await expect(page.getByRole("row", { name: `Page text ${ratio.toFixed(2)}:1 ${ratio >= 4.5 ? "Pass" : "Fail"} ${ratio >= 7 ? "Pass" : "Fail"}` })).toBeVisible();
     await page.getByRole("button", { name: "Export theme" }).click();
@@ -201,6 +212,28 @@ test("website shows adjusted and added swatches, reports rendered contrast, and 
     expect(JSON.parse(await readFile((await download.path())!, "utf8")).accent.$value.hex).toBe(properties["--accent"]);
     await close(page);
   }
+});
+
+test("the activity chart labels all four weeks and View report opens Accent by keyboard", async ({ page }) => {
+  await page.goto("/web/");
+  await expect(page.locator(".dashboard-metric")).toContainText("24");
+  const chart = page.getByRole("list", { name: "Projects per week" });
+  await expect(chart.getByRole("listitem")).toHaveText(["4 Wk 1", "5 Wk 2", "6 Wk 3", "9 Wk 4"]);
+  const bars = await chart.locator(".dashboard-bar").evaluateAll((nodes) => nodes.map((node) => {
+    const { height, bottom } = node.getBoundingClientRect();
+    return { height, bottom };
+  }));
+  expect(bars.map(({ height }) => height / bars[0].height * 4)).toEqual([4, 5, 6, 9]);
+  expect(new Set(bars.map(({ bottom }) => bottom)).size).toBe(1);
+  const report = page.getByRole("button", { name: "View report" });
+  await expect(report).toHaveCSS("text-decoration-line", "underline");
+  await report.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Tune Accent", exact: true })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Tune" })).toHaveAttribute("aria-selected", "true");
+  await page.locator("#hex").fill("#123456");
+  await expect(report).toHaveCSS("color", rgb("#123456"));
+  await expect(chart.locator(".dashboard-bar").last()).toHaveCSS("background-color", rgb("#123456"));
 });
 
 test("saved swatches are capped, compared, restored, removed and isolated by editor", async ({ page }) => {
@@ -466,4 +499,63 @@ test("Explore filters curated tags and source contrast independently of automati
   await expect(page.locator(".wada-card").getByText("Nordic Limewash")).toHaveCount(0);
   await page.getByLabel("Source").selectOption("wada");
   await expect(page.locator(".wada-card").getByText("Paper & ink")).toHaveCount(0);
+});
+
+test("Website Explore ranks source swatch counts before and after Wada loads and across pages", async ({ page }) => {
+  let finishLoading!: () => void;
+  const loading = new Promise<void>((resolve) => { finishLoading = resolve; });
+  await page.route("**/wada-combinations.json", async (route) => {
+    await loading;
+    await route.continue();
+  });
+  const cards = page.locator(".wada-card");
+  const results = () => cards.evaluateAll((nodes) => nodes.map((node) => ({
+    id: node.getAttribute("data-combination"), count: node.querySelectorAll(".chip").length,
+  })));
+  const rank = [3, 4, 2];
+  const more = page.locator("#wada-more");
+  let curated: Awaited<ReturnType<typeof results>>;
+  try {
+    await page.goto("/web/");
+    await expect(page.locator("#wada-load")).toHaveText("Loading Wada combinations…");
+    curated = await results();
+    expect([...new Set(curated.map(({ count }) => count))]).toEqual(rank);
+    expect(curated.slice(0, 3).map(({ id }) => id)).toEqual(["125", "The Ginkgo", "Cool Fall Breeze"]);
+  } finally {
+    finishLoading();
+  }
+
+  // Keep the featured cards in their catalogue positions and exclude their downloaded duplicates.
+  const { combinations: rows } = JSON.parse(await readFile("public/wada-combinations.json", "utf8")) as { combinations: number[][] };
+  const featured = new Set(curated.map(({ id }) => id));
+  const expected = rank.flatMap((count) => [
+    ...curated.filter((entry) => entry.count === count),
+    ...rows.filter(([id, ...swatches]) => swatches.length === count && !featured.has(String(id)))
+      .map(([id]) => ({ id: String(id), count })),
+  ]);
+  await expect(page.locator("#wada-results-status")).toHaveText(new RegExp(`^\\d+ of ${expected.length} combinations$`));
+  for (let shown = 0; shown < expected.length;) {
+    const displayed = await results();
+    expect(displayed.length).toBeGreaterThan(shown);
+    expect(displayed).toEqual(expected.slice(0, displayed.length));
+    shown = displayed.length;
+    if (shown < expected.length) {
+      // The observer can append the final page and hide the button between reads.
+      await more.evaluate((button: HTMLButtonElement) => {
+        if (!button.hidden) button.click();
+      });
+    }
+  }
+  expect(await results()).toEqual(expected);
+  await expect(more).toBeHidden();
+
+  await page.getByLabel("Search palettes").fill("blue");
+  await page.getByLabel("Source").selectOption("wada");
+  await page.getByLabel("Swatch count").selectOption("3");
+  await page.getByLabel("Style").selectOption("contrast");
+  const filtered = await results();
+  expect(filtered.length).toBeGreaterThan(1);
+  expect(filtered[0]).toEqual({ id: "125", count: 3 });
+  expect(filtered.every(({ id, count }) => Number(id) >= 121 && Number(id) <= 240 && count === 3)).toBe(true);
+  await expect(cards.filter({ hasNotText: /blue/i })).toHaveCount(0);
 });

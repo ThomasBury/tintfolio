@@ -3,6 +3,7 @@ import namedCombinations from "./named-combinations.json" with { type: "json" };
 import { hasSourceContrast, matchingCombinations, randomCombination, unpackCollection, type Combination, type Swatch } from "./wada.ts";
 
 const pageSize = 24;
+const websiteSwatchOrder = [3, 4, 2];
 declare const __FEATURED_COMBINATIONS__: Combination[];
 const featured = __FEATURED_COMBINATIONS__.map((combination) => ({
   ...combination, tags: { era: "Early Shōwa" },
@@ -103,6 +104,7 @@ export function mountCollection(
   ];
   let collection: Combination[] = curated;
   let matches: Combination[] = [];
+  let resultsOrder: Combination[] = [];
   let selected: Combination["id"] | undefined;
   let visible = pageSize;
   let loaded = false;
@@ -134,9 +136,12 @@ export function mountCollection(
       if (style.value === "contrast") return hasSourceContrast(item);
       return true;
     });
+    // Keep the catalogue order for the workspace's previous and next shortcuts.
+    resultsOrder = tool === "web" ? [...matches].sort((a, b) =>
+      websiteSwatchOrder.indexOf(a.swatches.length) - websiteSwatchOrder.indexOf(b.swatches.length)) : matches;
     const focused = document.activeElement instanceof HTMLButtonElement && results.contains(document.activeElement)
       ? document.activeElement.dataset.combination : undefined;
-    results.innerHTML = matches.slice(0, visible).map((item) => card(item, selected)).join("");
+    results.innerHTML = resultsOrder.slice(0, visible).map((item) => card(item, selected)).join("");
     if (focused) {
       const button = results.querySelector<HTMLButtonElement>(`[data-combination="${CSS.escape(focused)}"]`);
       (button ?? search).focus({ preventScroll: true });
@@ -172,7 +177,7 @@ export function mountCollection(
   function append(advanceFocus: boolean) {
     const first = visible;
     visible += pageSize;
-    results.insertAdjacentHTML("beforeend", matches.slice(first, visible).map((item) => card(item, selected)).join(""));
+    results.insertAdjacentHTML("beforeend", resultsOrder.slice(first, visible).map((item) => card(item, selected)).join(""));
     if (advanceFocus) (results.children[first] as HTMLButtonElement | undefined)?.focus();
     updateControls();
   }

@@ -897,10 +897,7 @@ details > summary {
   gap: 6px;
 }
 .library-search {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-#wada-filters-toggle {
-  display: none;
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 .library-search input {
   width: 100%;
@@ -1258,12 +1255,6 @@ html:has(.sheet-dialog[open]) {
   }
   .library-search .outline {
     padding-inline: 7px;
-  }
-  #wada-filters-toggle {
-    display: inline-flex;
-  }
-  .library-filters.filters-collapsed {
-    display: none;
   }
   .preview-options,
   .preview-options select {

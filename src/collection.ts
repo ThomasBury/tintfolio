@@ -65,7 +65,7 @@ export function mountCollection(
       <button type="button" class="outline" id="wada-filters-toggle" aria-expanded="false" aria-controls="wada-filters">Filters</button>
       <button type="button" class="outline" id="wada-random">Randomize</button>
     </div>
-    <div class="library-filters filters-collapsed" id="wada-filters">
+    <div class="library-filters" id="wada-filters" hidden>
       <label>Source<select id="wada-source">
         <option value="">All sources</option><option value="wada">Wada</option><option value="curated">Curated</option>
       </select></label>
@@ -94,6 +94,8 @@ export function mountCollection(
   const source = el<HTMLSelectElement>("source");
   const count = el<HTMLSelectElement>("count");
   const style = el<HTMLSelectElement>("style");
+  const filters = el("filters");
+  const filtersToggle = el<HTMLButtonElement>("filters-toggle");
   const results = el("results");
   const random = el<HTMLButtonElement>("random");
   const more = el<HTMLButtonElement>("more");
@@ -130,6 +132,8 @@ export function mountCollection(
 
   function filter() {
     audition();
+    const activeFilters = [source.value, Number(count.value), style.value].filter(Boolean).length;
+    filtersToggle.textContent = activeFilters ? `Filters (${activeFilters})` : "Filters";
     matches = matchingCombinations(collection, Number(count.value), search.value).filter((item) => {
       if (source.value && source.value !== (typeof item.id === "number" ? "wada" : "curated")) return false;
       if (style.value === "bold") return item.tags?.mood === "Bold";
@@ -204,10 +208,9 @@ export function mountCollection(
     return button && matches.find(({ id }) => String(id) === button.dataset.combination);
   }
 
-  el("filters-toggle").addEventListener("click", (event) => {
-    const button = event.currentTarget as HTMLButtonElement;
-    const collapsed = el("filters").classList.toggle("filters-collapsed");
-    button.setAttribute("aria-expanded", String(!collapsed));
+  filtersToggle.addEventListener("click", () => {
+    filters.hidden = !filters.hidden;
+    filtersToggle.setAttribute("aria-expanded", String(!filters.hidden));
   });
   search.addEventListener("input", reset);
   for (const input of [source, count, style]) input.addEventListener("change", reset);

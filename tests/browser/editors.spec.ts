@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { contrast } from "../../src/colour.ts";
+import { catalogue } from "../../src/design.ts";
+import namedCombinations from "../../src/named-combinations.json" with { type: "json" };
 
 const origin = "https://tintfolio.bury-thomas.workers.dev";
 const paintPilot = "/wall-paint/sage-green-and-warm-cream-living-room";
@@ -26,6 +28,7 @@ test("combination #48 applies on the sticky room, preserves room and floor, and 
   const library = combinations(page);
   await expect(library.getByRole("button", { name: /Nordic Limewash/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "A Dictionary of Color Combinations" })).toHaveAttribute("href", /seigensha/);
+  await page.getByRole("button", { name: /^Filters/ }).click();
   await page.getByLabel("Source").selectOption("wada");
   await expect(library.locator(".wada-card").first()).toContainText("Isabella Color");
   const card = await find(page, "#48");
@@ -264,6 +267,7 @@ test("failed library load leaves curated palettes usable and retry keeps keyboar
 
 test("Load more and scrolling append pages while keeping keyboard focus", async ({ page }) => {
   await page.goto("/paint/");
+  await page.getByRole("button", { name: /^Filters/ }).click();
   await page.getByLabel("Source").selectOption("wada");
   await expect(page.locator("#wada-results-status")).toHaveText("24 of 348 combinations");
   const more = page.getByRole("button", { name: "Load more" });
@@ -517,6 +521,37 @@ test("pilot pages have working presets, static guidance, clean canonicals and a 
 });
 
 for (const route of ["paint", "web"]) {
+  test(route + " keeps filter choices and results when the disclosure closes", async ({ page }) => {
+    await page.goto("/" + route + "/");
+    const filters = page.getByRole("button", { name: /^Filters/ });
+    const source = page.getByLabel("Source");
+    const count = page.getByLabel("Swatch count");
+    const cards = page.locator(".wada-card");
+    await expect(filters).toHaveAttribute("aria-expanded", "false");
+    await expect(source).toBeHidden();
+    if (route === "paint") {
+      const subtitle = (name: string) => cards.filter({ has: page.getByText(name, { exact: true }) }).locator("small");
+      await expect(subtitle("Soft sage")).toHaveText("#A9B39E · Warm cream");
+      await expect(subtitle("Clay & chalk")).toHaveText("#C78E76 · #F3E5D5");
+      await expect(subtitle("Coastal blue")).toHaveText("#C3D0D0 · #657F89");
+      await expect(subtitle("Nordic Limewash")).toHaveText("Soft sage · Warm cream");
+    }
+    await filters.press("Enter");
+    await source.selectOption("curated");
+    await count.selectOption("2");
+    await expect(filters).toHaveText("Filters (2)");
+    await expect(page.locator("#wada-load")).toBeEmpty();
+    const before = await cards.allTextContents();
+    expect(before.length).toBeGreaterThan(0);
+    await filters.press("Space");
+    await expect(filters).toBeFocused();
+    await expect(source).toBeHidden();
+    expect(await cards.allTextContents()).toEqual(before);
+    await filters.click();
+    await expect(source).toHaveValue("curated");
+    await expect(count).toHaveValue("2");
+  });
+
   test(route + " previews on hover without changing committed data and applies without leaving the workspace", async ({ page }) => {
     await page.goto("/" + route + "/");
     const preview = route === "paint" ? fill(page, "wall") : page.locator("#specimen");
@@ -561,6 +596,7 @@ test("Paint locks the exact wall HEX in hover and apply, and workspace shortcuts
   await hex.fill("#123456");
   await page.getByRole("button", { name: "Lock Main wall" }).click();
   await page.getByRole("tab", { name: "Explore" }).click();
+  await page.getByRole("button", { name: /^Filters/ }).click();
   await page.getByLabel("Source").selectOption("wada");
   await page.getByLabel("Swatch count").selectOption("2");
   await expect(page.locator("#wada-results-status")).toHaveText(/of \d+ combinations/);
@@ -635,6 +671,7 @@ test("Website preserves a locked accent in site mode when applying a pair and tu
 
 test("Explore filters curated tags and source contrast independently of automatic correction", async ({ page }) => {
   await page.goto("/web/");
+  await page.getByRole("button", { name: /^Filters/ }).click();
   const style = page.getByLabel("Style");
   await style.selectOption("bold");
   await expect(page.locator(".wada-card").getByText("The Ginkgo")).toBeVisible();
@@ -662,24 +699,30 @@ test("Website Explore ranks source swatch counts before and after Wada loads and
   })));
   const rank = [3, 4, 2];
   const more = page.locator("#wada-more");
-  let curated: Awaited<ReturnType<typeof results>>;
+  const { combinations: rows } = JSON.parse(await readFile("public/wada-combinations.json", "utf8")) as { combinations: number[][] };
+  const featured = new Set([4, 125, 344]);
+  const wada = rows.map(([id, ...swatches]) => ({ id: String(id), count: swatches.length }));
+  const named = namedCombinations.map(({ id, swatches }) => ({ id, count: swatches.length }));
+  const curated = [
+    ...catalogue.web.map(({ name, colours }) => ({ id: name, count: Object.keys(colours).length })),
+    ...named.filter(({ id }) => id === "Developer Docs"),
+    ...wada.filter(({ id }) => featured.has(Number(id))),
+    ...named.filter(({ id }) => id !== "Developer Docs"),
+  ];
   try {
     await page.goto("/web/");
     await expect(page.locator("#wada-load")).toHaveText("Loading Wada combinations…");
-    curated = await results();
-    expect([...new Set(curated.map(({ count }) => count))]).toEqual(rank);
-    expect(curated.slice(0, 3).map(({ id }) => id)).toEqual(["125", "The Ginkgo", "Cool Fall Breeze"]);
+    const firstPage = await results();
+    expect(firstPage).toHaveLength(24);
+    expect(firstPage).toEqual(rank.flatMap((count) => curated.filter((entry) => entry.count === count)).slice(0, 24));
   } finally {
     finishLoading();
   }
 
   // Keep the featured cards in their catalogue positions and exclude their downloaded duplicates.
-  const { combinations: rows } = JSON.parse(await readFile("public/wada-combinations.json", "utf8")) as { combinations: number[][] };
-  const featured = new Set(curated.map(({ id }) => id));
   const expected = rank.flatMap((count) => [
     ...curated.filter((entry) => entry.count === count),
-    ...rows.filter(([id, ...swatches]) => swatches.length === count && !featured.has(String(id)))
-      .map(([id]) => ({ id: String(id), count })),
+    ...wada.filter((entry) => entry.count === count && !featured.has(Number(entry.id))),
   ]);
   await expect(page.locator("#wada-results-status")).toHaveText(new RegExp(`^\\d+ of ${expected.length} combinations$`));
   for (let shown = 0; shown < expected.length;) {
@@ -698,6 +741,7 @@ test("Website Explore ranks source swatch counts before and after Wada loads and
   await expect(more).toBeHidden();
 
   await page.getByLabel("Search palettes").fill("blue");
+  await page.getByRole("button", { name: /^Filters/ }).click();
   await page.getByLabel("Source").selectOption("wada");
   await page.getByLabel("Swatch count").selectOption("3");
   await page.getByLabel("Style").selectOption("contrast");

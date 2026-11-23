@@ -122,5 +122,142 @@
       { "name": "GREEN OLIVE", "hex": "#7A7B2D" },
       { "name": "CHESTNUT CHEVRON", "hex": "#905843" }
     ]
+  },
+  {
+    "id": "Sapphire & Melon",
+    "swatches": [
+      { "name": "Sapphire", "hex": "#0F52BA" },
+      { "name": "Melon", "hex": "#FDBCB4" }
+    ]
+  },
+  {
+    "id": "Cinnabar & Lagoon",
+    "swatches": [
+      { "name": "Cinnabar", "hex": "#E34234" },
+      { "name": "Lagoon", "hex": "#017987" }
+    ]
+  },
+  {
+    "id": "Malachite & Orchid",
+    "swatches": [
+      { "name": "Malachite", "hex": "#0BDA51" },
+      { "name": "Orchid", "hex": "#DA70D6" }
+    ]
+  },
+  {
+    "id": "Merlot & Honey",
+    "swatches": [
+      { "name": "Merlot", "hex": "#73343A" },
+      { "name": "Honey", "hex": "#EB9605" }
+    ]
+  },
+  {
+    "id": "Soft Burgundy & Dusty Slime",
+    "swatches": [
+      { "name": "Soft Burgundy", "hex": "#7B3F4A" },
+      { "name": "Dusty Slime", "hex": "#8E9B6E" }
+    ]
+  },
+  {
+    "id": "Seaglass Green & Goldfish Orange",
+    "swatches": [
+      { "name": "Seaglass Green", "hex": "#7EC4B6" },
+      { "name": "Goldfish Orange", "hex": "#F5761A" }
+    ]
+  },
+  {
+    "id": "Portwine & Dory Blue",
+    "swatches": [
+      { "name": "Portwine", "hex": "#5E2129" },
+      { "name": "Dory Blue", "hex": "#1F65B3" }
+    ]
+  },
+  {
+    "id": "Pantone 1058 C, 48-8 C & 938 C",
+    "swatches": [
+      { "name": "1058 C", "hex": "#FC9E21" },
+      { "name": "48-8 C", "hex": "#D62E2F" },
+      { "name": "938 C", "hex": "#FCEEA8" }
+    ]
+  },
+  {
+    "id": "Pantone P 3-9 C, P 104-8 C & P 73-7 C",
+    "swatches": [
+      { "name": "P 3-9 C", "hex": "#F1EEDB" },
+      { "name": "P 104-8 C", "hex": "#214E92" },
+      { "name": "P 73-7 C", "hex": "#D83E7F" }
+    ]
+  },
+  {
+    "id": "Pantone P 15-12 C, P 97-16 C & P 30-8 C",
+    "swatches": [
+      { "name": "P 15-12 C", "hex": "#D2AE6D" },
+      { "name": "P 97-16 C", "hex": "#422057" },
+      { "name": "P 30-8 C", "hex": "#DD6E2D" }
+    ]
+  },
+  {
+    "id": "Pantone P 15-12 C, P 97-16 C & P 30-8 C (alternate)",
+    "swatches": [
+      { "name": "P 15-12 C", "hex": "#CFA868" },
+      { "name": "P 97-16 C", "hex": "#3A1467" },
+      { "name": "P 30-8 C", "hex": "#F37121" }
+    ]
+  },
+  {
+    "id": "Pantone P 8-9 C, P 177-16 C & P 4-7 C",
+    "swatches": [
+      { "name": "P 8-9 C", "hex": "#F5EED8" },
+      { "name": "P 177-16 C", "hex": "#2B2A29" },
+      { "name": "P 4-7 C", "hex": "#F6F1CE" }
+    ]
+  },
+  {
+    "id": "Pantone P 138-7 C, 14-0852 TCX & P 1-9 C",
+    "swatches": [
+      { "name": "P 138-7 C", "hex": "#1A7854" },
+      { "name": "14-0852 TCX", "hex": "#F3C12C" },
+      { "name": "P 1-9 C", "hex": "#F6F4EA" }
+    ]
+  },
+  {
+    "id": "Pantone P 138-7 C, 14-0852 TCX & P 1-9 C (alternate)",
+    "swatches": [
+      { "name": "P 138-7 C", "hex": "#4A7659" },
+      { "name": "14-0852 TCX", "hex": "#F3C12C" },
+      { "name": "P 1-9 C", "hex": "#FBF9ED" }
+    ]
+  },
+  {
+    "id": "Pantone 532 C, P 1-1 C & 232 U",
+    "swatches": [
+      { "name": "532 C", "hex": "#1C1F2A" },
+      { "name": "P 1-1 C", "hex": "#F8F7F2" },
+      { "name": "232 U", "hex": "#F16AB7" }
+    ]
+  },
+  {
+    "id": "Pantone 532 C, P 1-1 C & 232 U (alternate)",
+    "swatches": [
+      { "name": "532 C", "hex": "#1C1F2A" },
+      { "name": "P 1-1 C", "hex": "#FFFEF9" },
+      { "name": "232 U", "hex": "#F365B1" }
+    ]
+  },
+  {
+    "id": "Pantone 16-1406 TCX (Atmosphere), 19-1218 TCX (Potting Soil) & 17-1462 TCX (Flame)",
+    "swatches": [
+      { "name": "Atmosphere", "hex": "#A89C94", "code": "16-1406 TCX" },
+      { "name": "Potting Soil", "hex": "#54392D", "code": "19-1218 TCX" },
+      { "name": "Flame", "hex": "#F2552C", "code": "17-1462 TCX" }
+    ]
+  },
+  {
+    "id": "Pantone 16-5938 TPG (Mint), 19-3939 TCX (Blueprint) & 13-2120 TN (Cotton Candy)",
+    "swatches": [
+      { "name": "Mint", "hex": "#00A170", "code": "16-5938 TPG" },
+      { "name": "Blueprint", "hex": "#2D3359", "code": "19-3939 TCX" },
+      { "name": "Cotton Candy", "hex": "#FFA9D6", "code": "13-2120 TN" }
+    ]
   }
 ]

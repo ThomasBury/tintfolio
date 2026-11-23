@@ -133,9 +133,11 @@ test("rendered contrast uses full precision for body, large text and non-text AA
     const get = (label: string) => contrastResults(tokens).find((check) => check.label === label)!;
     assert.equal(get("Page text").aa, bodyAA);
     assert.equal(get("Page text").aaa, bodyAAA);
+    assert.equal(get("View report text").aa, bodyAA);
+    assert.equal(get("View report text").aaa, bodyAAA);
     assert.equal(get("Page heading").aa, largeAA);
     assert.equal(get("Page heading").aaa, largeAAA);
-    for (const label of ["Input border", "Alert icon"]) {
+    for (const label of ["Input border", "Alert icon", "Latest activity bar"]) {
       assert.equal(get(label).aa, largeAA);
       assert.equal(get(label).aaa, null);
     }

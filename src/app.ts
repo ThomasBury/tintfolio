@@ -17,6 +17,7 @@ import { mountPhoto } from "./photo.ts";
 const tool = document.body.dataset.tool as Tool;
 const preset = document.body.dataset.preset;
 const paint = tool === "paint";
+const mobileLayout = matchMedia("(max-width: 760px)");
 const initial = startDesign(tool, preset);
 let d = initial.design;
 let role = editable(d)[0];
@@ -39,6 +40,7 @@ function persist() {
 
 function applyDesign(design: Design, announcement: string, trigger?: HTMLElement, selection?: typeof selected) {
   const active = document.activeElement === trigger;
+  const surfacesChanged = paint && (design.mode !== d.mode || !!selection !== !!selected);
   if (JSON.stringify(design) !== JSON.stringify(d))
     paletteUndo = { design: structuredClone(d), role, trigger, selected };
   d = design;
@@ -48,6 +50,8 @@ function applyDesign(design: Design, announcement: string, trigger?: HTMLElement
   persist();
   render(active ? trigger?.id : undefined);
   collection.setSelected(selected?.combination.id);
+  if (surfacesChanged && mobileLayout.matches && trigger?.closest("#palette-editor"))
+    el("palette-editor").scrollIntoView({ block: "nearest" });
   el("status").textContent = announcement;
 }
 
@@ -198,7 +202,7 @@ function advice() {
       <thead><tr><th scope="col">Pair</th><th scope="col">Ratio</th><th scope="col">AA</th><th scope="col">AAA</th></tr></thead>
       <tbody>${contrastResults(tokens).map(({ label, ratio, aa, aaa }) => `<tr><th scope="row">${label}</th><td>${ratio.toFixed(2)}:1</td><td>${aa ? "Pass" : "Fail"}</td><td>${aaa === null ? "—" : aaa ? "Pass" : "Fail"}</td></tr>`).join("")}</tbody>
     </table>
-    <p class="sample">AA / AAA minimums are 4.5:1 / 7:1 for body text and 3:1 / 4.5:1 for large headings. Borders and icons require 3:1 for AA.</p>`;
+    <p class="sample">AA / AAA minimums are 4.5:1 / 7:1 for regular text and 3:1 / 4.5:1 for large headings. Graphical elements require 3:1 for AA.</p>`;
 }
 
 function key() {
@@ -223,16 +227,14 @@ function paintSwatches() {
     assignmentSelect(d.pair, combination, secondaryIndex, wallIndex, d.colours[d.pair]);
 }
 
-function paintTools(open: boolean) {
-  return `<details id="canvas-options" ${open ? "open" : ""}>
-    <summary>Room surfaces${selected && d.mode === "pair" ? " and swatches" : ""}</summary>
+function paintTools() {
+  return `<div class="canvas-heading"><h3 id="room-surfaces-title">Room surfaces</h3><small>Approximate lighting</small></div>
     <div class="canvas-fields">
-      ${d.mode === "pair" ? `<label>Surfaces<select id="pair">${selectOptions({ ceiling: "Wall + ceiling", feature: "Main wall + feature wall" }, d.pair)}</select></label>` : ""}
-      ${selected && d.mode === "pair" ? `<div class="swatch-fields" id="swatch-fields">${paintSwatches()}</div>` : ""}
       <div class="floor-control"><label>Existing floor <span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button type="button" id="reset-floor" class="outline" ${d.floor ? "" : "disabled"}>Reset floor</button></div>
-      <small>Approximate lighting</small>
+      ${d.mode === "pair" ? `<label>Surfaces<select id="pair" aria-label="Surfaces">${selectOptions({ ceiling: "Wall + ceiling", feature: "Main wall + feature wall" }, d.pair)}</select></label>` : ""}
+      ${selected && d.mode === "pair" ? `<div class="swatch-fields" id="swatch-fields">${paintSwatches()}</div>` : ""}
       <div id="canvas-notes"></div>
-    </div></details>`;
+    </div>`;
 }
 
 function webNotes(changed: Assignment[]) {
@@ -261,7 +263,6 @@ function updateCanvasNotes() {
 
 function render(focus?: string) {
   toneStart = undefined;
-  const canvasOpen = el<HTMLDetailsElement>("canvas-options")?.open;
   const previewControl = paint
     ? `<label>Room<select id="room-choice" aria-label="Room">${selectOptions(rooms, d.room)}</select></label>
        <label>Lighting<select id="lighting" aria-label="Lighting">${selectOptions(lightingPresets, d.lighting)}</select></label>`
@@ -270,8 +271,8 @@ function render(focus?: string) {
   el("preview-card").innerHTML = `
     <div class="preview-head"><div class="section-heading">${icon(paint ? "room" : "web")}<h2 id="preview-title">${paint ? "Room preview" : "Website preview"}</h2></div>
       <div class="preview-options">${previewControl}</div></div>
-    <div id="picture">${preview()}</div>
-    ${paint ? paintTools(!!canvasOpen) : ""}`;
+    <div id="picture">${preview()}</div>`;
+  if (paint) el("canvas-options").innerHTML = paintTools();
   el("role-strip").innerHTML = strip();
   const value = d.colours[role];
   el("palette-fields").innerHTML = `${modes()}<div class="editing">
@@ -370,6 +371,7 @@ el("studio").tabIndex = 0;
 el("studio").innerHTML = `
   <div class="canvas-stack">
     <section id="preview-card" class="preview-card" aria-labelledby="preview-title"></section>
+    ${paint ? '<section id="canvas-options" aria-labelledby="room-surfaces-title"></section>' : ""}
     <div class="actions">
       <button type="button" id="saved-open" class="outline" aria-haspopup="dialog">Saved swatches</button>
       <button type="button" id="share" class="outline">${icon("share")}Share</button>
@@ -432,6 +434,7 @@ document.addEventListener("click", (event) => {
   const id = button.id;
   if (id === "undo-palette" && paletteUndo) {
     const previous = paletteUndo;
+    const surfacesChanged = paint && (previous.design.mode !== d.mode || !!previous.selected !== !!selected);
     d = previous.design;
     role = previous.role;
     selected = previous.selected;
@@ -446,6 +449,7 @@ document.addEventListener("click", (event) => {
         : el("wada-search");
     const fallback = el("palette-editor").classList.contains("collapsed") && el("sheet-toggle").checkVisibility()
       ? el("sheet-toggle") : el("palette-editor").querySelector<HTMLElement>('[aria-selected="true"]')!;
+    if (surfacesChanged && mobileLayout.matches) el("palette-editor").scrollIntoView({ block: "nearest" });
     (target.checkVisibility() ? target : fallback).focus({ preventScroll: true });
     el("status").textContent = "Previous palette restored.";
   } else if (button.dataset.mode) {
@@ -602,8 +606,9 @@ el("preview-card").addEventListener("click", (event) => {
   if (target.closest("input, label, select, summary")) return;
   const surface = target.closest<SVGElement>("[data-surface]")?.dataset.surface;
   if (surface === "floor") {
-    el<HTMLDetailsElement>("canvas-options").open = true;
-    el("floor").focus();
+    const floor = el("floor");
+    floor.scrollIntoView({ block: "nearest" });
+    floor.focus({ preventScroll: true });
     return;
   }
   let picked = target.closest<HTMLElement>("[data-canvas-role]")?.dataset.canvasRole as Role | undefined;

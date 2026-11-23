@@ -65,14 +65,55 @@ for (const route of ["paint", "web"]) {
 
 test("floor editing stays independent and the print spec fits at 320 pixels", async ({ page }) => {
   await page.goto("/paint/");
-  await page.getByText("Room surfaces", { exact: true }).tap();
-  const floor = page.getByLabel("Existing floor");
+  const surfaces = page.getByRole("region", { name: "Room surfaces" });
+  const floor = surfaces.getByLabel("Existing floor");
+  const reset = surfaces.getByRole("button", { name: "Reset floor" });
+  await onScreen(surfaces);
+  await expect(reset).toBeDisabled();
+  await expect(surfaces.getByLabel("Surfaces", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Lighting").press("Tab");
+  await expect(floor).toBeFocused();
+  await page.getByLabel("Lighting").focus();
+  const illustratedFloor = page.locator("[data-surface=floor]");
+  const bounds = (await illustratedFloor.boundingBox())!;
+  await illustratedFloor.tap({ position: { x: bounds.width / 2, y: bounds.height - 5 } });
+  await expect(floor).toBeFocused();
   await floor.fill("#57616b");
-  await expect(page.locator("[data-surface=floor]")).toHaveCSS("fill", "rgb(87, 97, 107)");
-  await page.getByRole("button", { name: "Reset floor" }).tap();
-  await expect(page.locator("[data-surface=floor]")).toHaveCSS("fill", "rgb(210, 177, 140)");
+  await expect(illustratedFloor).toHaveCSS("fill", "rgb(87, 97, 107)");
+  await reset.tap();
+  await expect(illustratedFloor).toHaveCSS("fill", "rgb(210, 177, 140)");
+
+  await page.getByLabel("Search palettes").fill("#344");
+  await page.getByRole("button", { name: /Combination #344/ }).tap();
+  const pair = surfaces.getByLabel("Surfaces", { exact: true });
+  await pair.press("End");
+  await expect(pair).toHaveValue("feature");
+  const wall = surfaces.getByLabel("Main wall", { exact: true });
+  await wall.selectOption("2");
+  await expect(page.locator("[data-surface=wall]").first()).toHaveCSS("fill", "rgb(163, 106, 165)");
+  await onScreen(wall);
+  await onScreen(page.locator("#room"));
+  await page.setViewportSize({ width: 320, height: 340 });
+  await floor.scrollIntoViewIfNeeded();
+  await onScreen(floor);
+  await onScreen(pair);
   await page.getByRole("button", { name: "Paint spec sheet" }).tap();
   await onScreen(page.getByRole("button", { name: "Print or save as PDF" }));
   const dialog = page.getByRole("dialog");
   expect(await dialog.evaluate((node) => node.scrollWidth)).toBe(await dialog.evaluate((node) => node.clientWidth));
+});
+
+test("the Website activity chart and report action fit the 320-pixel preview", async ({ page }) => {
+  await page.goto("/web/");
+  const chart = page.getByRole("list", { name: "Projects per week" });
+  const report = page.getByRole("button", { name: "View report" });
+  await onScreen(chart);
+  await onScreen(report);
+  await report.tap();
+  await expect(page.getByRole("button", { name: "Tune Accent", exact: true })).toBeFocused();
+  await onScreen(page.locator("#role-strip"));
+  await page.setViewportSize({ width: 320, height: 340 });
+  await report.scrollIntoViewIfNeeded();
+  await onScreen(report);
+  await onScreen(chart);
 });

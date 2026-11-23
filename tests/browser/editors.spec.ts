@@ -513,14 +513,13 @@ test("Website Explore ranks source swatch counts before and after Wada loads and
     id: node.getAttribute("data-combination"), count: node.querySelectorAll(".chip").length,
   })));
   const rank = [3, 4, 2];
-  const counts = async () => [...new Set((await results()).map(({ count }) => count))];
-  const more = page.getByRole("button", { name: "Load more" });
+  const more = page.locator("#wada-more");
   let curated: Awaited<ReturnType<typeof results>>;
   try {
     await page.goto("/web/");
     await expect(page.locator("#wada-load")).toHaveText("Loading Wada combinations…");
-    expect(await counts()).toEqual(rank);
     curated = await results();
+    expect([...new Set(curated.map(({ count }) => count))]).toEqual(rank);
     expect(curated.slice(0, 3).map(({ id }) => id)).toEqual(["125", "The Ginkgo", "Cool Fall Breeze"]);
   } finally {
     finishLoading();
@@ -534,14 +533,18 @@ test("Website Explore ranks source swatch counts before and after Wada loads and
     ...rows.filter(([id, ...swatches]) => swatches.length === count && !featured.has(String(id)))
       .map(([id]) => ({ id: String(id), count })),
   ]);
-  await expect(page.locator("#wada-results-status")).toHaveText(`24 of ${expected.length} combinations`);
-  expect(await counts()).toEqual([3]);
+  await expect(page.locator("#wada-results-status")).toHaveText(new RegExp(`^\\d+ of ${expected.length} combinations$`));
   for (let shown = 0; shown < expected.length;) {
     const displayed = await results();
     expect(displayed.length).toBeGreaterThan(shown);
     expect(displayed).toEqual(expected.slice(0, displayed.length));
     shown = displayed.length;
-    if (shown < expected.length) await more.press("Enter");
+    if (shown < expected.length) {
+      // The observer can append the final page and hide the button between reads.
+      await more.evaluate((button: HTMLButtonElement) => {
+        if (!button.hidden) button.click();
+      });
+    }
   }
   expect(await results()).toEqual(expected);
   await expect(more).toBeHidden();

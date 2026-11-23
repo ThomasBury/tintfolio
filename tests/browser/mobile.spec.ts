@@ -70,10 +70,13 @@ test("floor editing stays independent and the print spec fits at 320 pixels", as
   const reset = surfaces.getByRole("button", { name: "Reset floor" });
   await onScreen(surfaces);
   await expect(reset).toBeDisabled();
-  await expect(surfaces.getByLabel("Surfaces", { exact: true })).toHaveCount(0);
-  await page.getByLabel("Lighting").press("Tab");
+  const oneColour = surfaces.getByRole("radio", { name: "One colour" });
+  await expect(oneColour).toBeChecked();
+  await page.getByRole("radio", { name: "North daylight" }).press("Tab");
+  await expect(oneColour).toBeFocused();
+  await oneColour.press("Tab");
   await expect(floor).toBeFocused();
-  await page.getByLabel("Lighting").focus();
+  await page.getByRole("radio", { name: "North daylight" }).focus();
   const illustratedFloor = page.locator("[data-surface=floor]");
   const bounds = (await illustratedFloor.boundingBox())!;
   await illustratedFloor.tap({ position: { x: bounds.width / 2, y: bounds.height - 5 } });
@@ -85,9 +88,9 @@ test("floor editing stays independent and the print spec fits at 320 pixels", as
 
   await page.getByLabel("Search palettes").fill("#344");
   await page.getByRole("button", { name: /Combination #344/ }).tap();
-  const pair = surfaces.getByLabel("Surfaces", { exact: true });
-  await pair.press("End");
-  await expect(pair).toHaveValue("feature");
+  const pair = surfaces.getByRole("radio", { name: "Feature wall" });
+  await pair.tap();
+  await expect(pair).toBeChecked();
   const wall = surfaces.getByLabel("Main wall", { exact: true });
   await wall.selectOption("2");
   await expect(page.locator("[data-surface=wall]").first()).toHaveCSS("fill", "rgb(163, 106, 165)");
@@ -101,6 +104,38 @@ test("floor editing stays independent and the print spec fits at 320 pixels", as
   await onScreen(page.getByRole("button", { name: "Print or save as PDF" }));
   const dialog = page.getByRole("dialog");
   expect(await dialog.evaluate((node) => node.scrollWidth)).toBe(await dialog.evaluate((node) => node.clientWidth));
+});
+
+test("paint layout, lighting and the ceiling editor work by keyboard and touch at 320 pixels", async ({ page }) => {
+  await page.goto("/paint/");
+  const lighting = page.getByRole("group", { name: "Lighting" });
+  const north = lighting.getByRole("radio", { name: "North daylight" });
+  const golden = lighting.getByRole("radio", { name: "Golden hour" });
+  const evening = lighting.getByRole("radio", { name: "Warm evening" });
+  await expect(north).toBeChecked();
+  await north.press("ArrowRight");
+  await expect(golden).toBeChecked();
+  await expect(golden).toBeFocused();
+  await expect(golden.locator("..")).toHaveCSS("outline-style", "solid");
+  await evening.tap();
+  await expect(evening).toBeChecked();
+
+  const layout = page.getByRole("group", { name: "Paint layout" });
+  await layout.getByRole("radio", { name: "One colour" }).press("ArrowLeft");
+  const feature = layout.getByRole("radio", { name: "Feature wall" });
+  await expect(feature).toBeChecked();
+  await onScreen(feature);
+  const swatches = page.getByRole("group", { name: "Active swatches" });
+  await expect(swatches.locator("code")).toHaveText(["#A9B39E", "#66765E", "#F5F0E6"]);
+  await expect(swatches.getByText("Main wall", { exact: true })).toBeVisible();
+  await expect(swatches.getByText("Feature wall", { exact: true })).toBeVisible();
+  const editCeiling = swatches.getByRole("button", { name: /^Edit ceiling #/ });
+  await editCeiling.tap();
+  await expect(editCeiling).toBeFocused();
+  const hex = page.getByLabel("Ceiling HEX");
+  await hex.fill("#26598D");
+  await expect(swatches.locator("code")).toHaveText(["#A9B39E", "#66765E", "#26598D"]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 });
 
 test("the door colour editor fits beside the sticky room preview on mobile", async ({ page }) => {
@@ -131,8 +166,15 @@ test("the Website activity chart and report action fit the 320-pixel preview", a
   await onScreen(chart);
   await onScreen(report);
   await report.tap();
-  await expect(page.getByRole("button", { name: "Tune Accent", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: /^Edit Accent #/ })).toBeFocused();
   await onScreen(page.locator("#role-strip"));
+  const tiles = page.locator(".tile");
+  await expect(tiles).toHaveCount(4);
+  for (const tile of await tiles.all()) {
+    await expect(tile.locator("code")).toHaveText(/^#[\dA-F]{6}$/);
+    expect(await tile.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   await page.setViewportSize({ width: 320, height: 340 });
   await report.scrollIntoViewIfNeeded();
   await onScreen(report);

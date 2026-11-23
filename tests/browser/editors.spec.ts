@@ -54,12 +54,19 @@ test("combination #48 applies on the sticky room, preserves room and floor, and 
 test("paint reassigns and swaps roles on the canvas, and prints its surface colours", async ({ page }) => {
   await page.goto("/paint/?mode=pair&room=kitchen&pair=feature&floor=57616B&wall=123456&feature=998877");
   const canvas = page.getByRole("region", { name: "Room surfaces" });
-  await expect(canvas.getByLabel("Surfaces", { exact: true })).toHaveValue("feature");
+  await expect(canvas.getByRole("radio", { name: "Feature wall" })).toBeChecked();
   await (await find(page, "#344")).click();
   const wall = canvas.getByLabel("Main wall", { exact: true });
-  const secondary = canvas.getByLabel("Feature wall", { exact: true });
+  const secondary = canvas.getByRole("combobox", { name: "Feature wall", exact: true });
   await expect(wall).toHaveValue("0");
   await expect(secondary).toHaveValue("1");
+  await expect(canvas.getByText("Choose which two palette colours to apply.")).toBeVisible();
+  for (const selector of [wall, secondary]) {
+    await expect(selector.locator("option")).toHaveText([
+      "Cinnamon Buff · #FDC57E", "Deep Lyons Blue · #1C4286",
+      "Aconite Violet · #A36AA5", "Black · #111314",
+    ]);
+  }
   await expect(wall.locator('option[value="1"]')).toBeDisabled();
   await wall.selectOption("2");
   await secondary.selectOption("3");
@@ -70,9 +77,9 @@ test("paint reassigns and swaps roles on the canvas, and prints its surface colo
   await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#111314"));
   await expect(fill(page, "feature")).toHaveCSS("fill", rgb("#A36AA5"));
   const before = await fill(page, "wall").evaluate((node) => getComputedStyle(node).fill);
-  await page.getByLabel("Lighting").selectOption("golden");
+  await page.getByRole("radio", { name: "Golden hour" }).check();
   await expect(page.locator("#room-light stop").first()).toHaveAttribute("stop-color", "#FFCC78");
-  await page.getByLabel("Lighting").selectOption("evening");
+  await page.getByRole("radio", { name: "Warm evening" }).check();
   await expect(page.locator("radialGradient#room-light")).toBeAttached();
   await expect(fill(page, "wall")).toHaveCSS("fill", before);
   await page.getByRole("button", { name: "Paint spec sheet" }).click();
@@ -150,6 +157,81 @@ test("the door follows the right main wall or keeps a custom colour through pale
   await expect(door).toHaveCSS("fill", rgb("#8642AC"));
 });
 
+test("the feature-wall ceiling survives palette actions, reload, saved restore and sharing", async ({ page, browser }) => {
+  const legacy = "mode=pair&room=living&pair=feature&lighting=north&wall=123456&feature=998877";
+  await page.goto("/paint/?" + legacy);
+  const ceiling = fill(page, "ceiling");
+  const expectCeiling = (value: string) => expect(ceiling).toHaveCSS("fill", rgb(value));
+  const edit = page.getByRole("button", { name: /^Edit ceiling #/ });
+  const hex = page.getByLabel("Ceiling HEX");
+  await expectCeiling("#F5F0E6");
+  await page.evaluate((design) => localStorage.setItem("tintfolio-saved-paint", JSON.stringify([design])), legacy);
+  const openSaved = () => page.getByRole("button", { name: "Saved swatches" }).click();
+  const save = page.getByRole("button", { name: "Save current design" });
+  await openSaved();
+  await save.click();
+  await expect(page.getByRole("status").filter({ hasText: "This design is already saved." })).toBeVisible();
+  await close(page);
+
+  await edit.press("Enter");
+  await expect(hex).toBeVisible();
+  await hex.fill("#2468AC");
+  await expectCeiling("#2468AC");
+  await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#123456"));
+  await expect(fill(page, "feature")).toHaveCSS("fill", rgb("#998877"));
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expectCeiling("#F5F0E6");
+  await hex.fill("#2468AC");
+  await page.getByRole("tab", { name: "Explore" }).click();
+  const card = await find(page, "#344");
+  await card.hover();
+  await expect(fill(page, "feature")).not.toHaveCSS("fill", rgb("#998877"));
+  await expectCeiling("#2468AC");
+  await card.click();
+  await expectCeiling("#2468AC");
+  await page.getByLabel("Search palettes").fill("#48");
+  const random = page.getByRole("button", { name: "Randomize" });
+  await random.click();
+  await expect(page.locator("#status")).toHaveText("Combination #48 applied.");
+  await expectCeiling("#2468AC");
+  const mainBefore = await fill(page, "wall").evaluate((node) => getComputedStyle(node).fill);
+  const featureBefore = await fill(page, "feature").evaluate((node) => getComputedStyle(node).fill);
+  await page.getByRole("button", { name: "Swap roles" }).click();
+  await expect(fill(page, "wall")).toHaveCSS("fill", featureBefore);
+  await expect(fill(page, "feature")).toHaveCSS("fill", mainBefore);
+  await expectCeiling("#2468AC");
+  await ceiling.click({ position: { x: 280, y: 8 } });
+  await expect(hex).toHaveValue("#2468AC");
+  await hex.fill("#8642AC");
+  await page.getByRole("button", { name: "Undo palette" }).click();
+  await expect(fill(page, "wall")).toHaveCSS("fill", mainBefore);
+  await expectCeiling("#8642AC");
+
+  await page.reload();
+  await expectCeiling("#8642AC");
+  await openSaved();
+  await save.click();
+  await expect(page.locator(".saved-design").nth(1)).toContainText("Ceiling #8642AC");
+  await page.getByRole("button", { name: "Restore design 1" }).click();
+  await expectCeiling("#F5F0E6");
+  await openSaved();
+  await page.getByRole("button", { name: "Restore design 2" }).click();
+  await expectCeiling("#8642AC");
+
+  const url = await share(page);
+  expect(new URL(url).searchParams.get("ceiling")).toBe("8642AC");
+  const fresh = await browser.newPage();
+  try {
+    await fresh.goto(url);
+    await expect(fill(fresh, "ceiling")).toHaveCSS("fill", rgb("#8642AC"));
+    await fresh.getByRole("button", { name: "Paint spec sheet" }).click();
+    await fresh.emulateMedia({ media: "print" });
+    await expect(fresh.getByRole("row", { name: "Ceiling #8642AC" })).toBeVisible();
+  } finally {
+    await fresh.close();
+  }
+});
+
 test("manual paint edits are reflected in the canvas swatch controls", async ({ page }) => {
   await page.goto("/paint/");
   await (await find(page, "#344")).click();
@@ -197,8 +279,8 @@ test("Load more and scrolling append pages while keeping keyboard focus", async 
 test("old and new links work in a fresh browser and shared state takes precedence", async ({ page, browser }) => {
   const old = "/paint/?mode=pair&room=bedroom&pair=ceiling&wall=102030&ceiling=456789";
   await page.goto(old);
-  await expect(page.getByLabel("Lighting")).toHaveValue("north");
-  await page.getByLabel("Lighting").selectOption("golden");
+  await expect(page.getByRole("radio", { name: "North daylight" })).toBeChecked();
+  await page.getByRole("radio", { name: "Golden hour" }).check();
   const newPaint = await share(page);
   expect(new URL(newPaint).searchParams.get("lighting")).toBe("golden");
   await page.goto("/web/?mode=site&background=F3EADF&text=492E46&accent=35615E&onAccent=FFFFFF");
@@ -212,10 +294,10 @@ test("old and new links work in a fresh browser and shared state takes precedenc
     await other.getByLabel("Room", { exact: true }).selectOption("kitchen");
     await other.goto(newPaint);
     await expect(other.getByLabel("Room", { exact: true })).toHaveValue("bedroom");
-    await expect(other.getByLabel("Lighting")).toHaveValue("golden");
+    await expect(other.getByRole("radio", { name: "Golden hour" })).toBeChecked();
     await expect(fill(other, "wall")).toHaveCSS("fill", rgb("#102030"));
     await other.goto(old);
-    await expect(other.getByLabel("Lighting")).toHaveValue("north");
+    await expect(other.getByRole("radio", { name: "North daylight" })).toBeChecked();
     await other.goto(newWeb);
     await expect(other.getByLabel("Theme", { exact: true })).toHaveValue("dark");
     await expect(other.locator("#specimen-button")).toHaveCSS("background-color", rgb("#35615E"));
@@ -293,7 +375,7 @@ test("the activity chart labels all four weeks and View report opens Accent by k
   await expect(report).toHaveCSS("text-decoration-line", "underline");
   await report.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Tune Accent", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: /^Edit Accent #/ })).toBeFocused();
   await expect(page.getByRole("tab", { name: "Tune" })).toHaveAttribute("aria-selected", "true");
   await page.locator("#hex").fill("#123456");
   await expect(report).toHaveCSS("color", rgb("#123456"));
@@ -306,7 +388,7 @@ test("saved swatches are capped, compared, restored, removed and isolated by edi
   const save = page.getByRole("button", { name: "Save current design" });
   for (const [hash, light] of [["Nordic Limewash", "north"], ["Clay & chalk", "golden"], ["Coastal blue", "evening"], ["Soft sage", "golden"]]) {
     await (await find(page, hash)).click();
-    await page.getByLabel("Lighting").selectOption(light);
+    await page.locator("#lighting-" + light).check();
     await open();
     await save.click();
     await close(page);
@@ -320,7 +402,7 @@ test("saved swatches are capped, compared, restored, removed and isolated by edi
   await page.getByRole("button", { name: "Remove design 4" }).click();
   await expect(cards).toHaveCount(3);
   await page.getByRole("button", { name: "Restore design 2" }).click();
-  await expect(page.getByLabel("Lighting")).toHaveValue("golden");
+  await expect(page.getByRole("radio", { name: "Golden hour" })).toBeChecked();
   await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#C78E76"));
   await page.goto("/web/");
   await open();
@@ -343,7 +425,7 @@ test("denied storage keeps live editing and temporary saved swatches working", a
 });
 
 test("photo tint downscales, moves and resizes by keyboard and pointer, and stays local", async ({ page }) => {
-  await page.goto("/paint/");
+  await page.goto("/paint/?mode=pair&room=living&pair=feature&wall=A9B39E&feature=66765E&ceiling=804020");
   const sample = await page.evaluate(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 1440;
@@ -364,6 +446,7 @@ test("photo tint downscales, moves and resizes by keyboard and pointer, and stay
   await input.setInputFiles({ name: "sample.png", mimeType: "image/png", buffer: Buffer.from(sample, "base64") });
   await expect(page.locator("#photo-status")).toHaveText("Photo ready.");
   await expect(page.locator("#photo-canvas")).toHaveAttribute("width", "1200");
+  await page.getByLabel("Paint colour").selectOption({ label: "Ceiling · #804020" });
   const region = page.getByRole("group", { name: "Move tint region" });
   const resize = page.getByRole("button", { name: "Resize tint region" });
   const box = (await region.boundingBox())!;
@@ -389,7 +472,8 @@ test("photo tint downscales, moves and resizes by keyboard and pointer, and stay
     return [[0, 0], [500, 250], [500, 480]].map(([x, y]) => Array.from(ctx.getImageData(x, y, 1, 1).data));
   });
   expect(pixels[0]).toEqual([70, 70, 70, 255]);
-  expect(pixels[1][0]).not.toBe(pixels[1][1]);
+  expect(pixels[1][0]).toBeGreaterThan(pixels[1][1]);
+  expect(pixels[1][1]).toBeGreaterThan(pixels[1][2]);
   expect(pixels[1][1]).toBeLessThan(pixels[2][1]);
   expect(requests).toEqual([]);
   await close(page);
@@ -514,7 +598,7 @@ test("Paint locks the exact wall HEX in hover and apply, and workspace shortcuts
   await page.getByRole("button", { name: "Undo palette" }).click();
   await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#123456"));
   await fill(page, "ceiling").click({ position: { x: 280, y: 8 } });
-  await expect(page.getByRole("button", { name: "Tune Ceiling" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: /^Edit Ceiling #/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("Suggestions", { exact: true })).toBeVisible();
   const before = await hex.inputValue();
   await page.getByRole("slider", { name: "Lightness" }).press("ArrowLeft");
@@ -523,10 +607,10 @@ test("Paint locks the exact wall HEX in hover and apply, and workspace shortcuts
 
 test("Website preserves a locked accent in site mode when applying a pair and tunes canvas roles", async ({ page }) => {
   await page.goto("/web/?mode=site&background=F3EADF&text=492E46&accent=35615E&onAccent=FFFFFF");
-  await page.getByRole("button", { name: "Tune Accent", exact: true }).click();
+  await page.getByRole("button", { name: /^Edit Accent #/ }).click();
   await expect(page.locator("#hex")).toHaveValue("#35615E");
   await page.locator("#specimen-button span").click();
-  await expect(page.getByRole("button", { name: "Tune Text on accent" })).toBeFocused();
+  await expect(page.getByRole("button", { name: /^Edit Text on accent #/ })).toBeFocused();
   await expect(page.locator("#hex")).toHaveValue("#FFFFFF");
   await page.getByRole("button", { name: "Lock Accent", exact: true }).click();
   await page.getByRole("tab", { name: "Explore" }).click();
@@ -540,7 +624,7 @@ test("Website preserves a locked accent in site mode when applying a pair and tu
   expect(url.searchParams.get("mode")).toBe("site");
   expect(url.searchParams.get("accent")).toBe("35615E");
   await page.getByRole("heading", { name: "Workspace", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Tune Primary Text" })).toBeFocused();
+  await expect(page.getByRole("button", { name: /^Edit Primary Text #/ })).toBeFocused();
   const hex = page.locator("#hex");
   await expect(hex).toHaveValue("#353C30");
   await page.getByRole("slider", { name: "Warmth" }).press("ArrowRight");

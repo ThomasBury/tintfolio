@@ -25,9 +25,10 @@ export function mountSaved(tool: Tool, current: () => Design, restore: (design: 
       if (!stored) { entries = []; return; }
       const parsed: unknown = JSON.parse(stored);
       entries = Array.isArray(parsed)
-        ? [...new Set(parsed.filter((value): value is string =>
-            typeof value === "string" && decode(tool, new URLSearchParams(value)) !== null,
-          ))].slice(0, 4)
+        ? [...new Set(parsed.flatMap((value) => {
+            const design = typeof value === "string" && decode(tool, new URLSearchParams(value));
+            return design ? [shareParams(tool, design).toString()] : [];
+          }))].slice(0, 4)
         : [];
     } catch {
       temporary = true;

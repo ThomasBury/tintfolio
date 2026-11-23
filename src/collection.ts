@@ -1,4 +1,4 @@
-import { catalogue, editable, example, labels, neutral, type Role, type Tool } from "./design.ts";
+import { catalogue, labels, neutral, type Role, type Tool } from "./design.ts";
 import namedCombinations from "./named-combinations.json" with { type: "json" };
 import { hasSourceContrast, matchingCombinations, randomCombination, unpackCollection, type Combination, type Swatch } from "./wada.ts";
 
@@ -26,9 +26,8 @@ function starters(tool: Tool): Combination[] {
         { mood: "Calm", use: ["Editorial"] },
         { mood: "Bold", use: ["Editorial"] },
       ];
-  return catalogue[tool].map(({ name, reason }, index) => {
-    const design = example(tool, index);
-    const swatches: Swatch[] = editable(design).map((role) => ({ name: labels[role], hex: design.colours[role] }));
+  return catalogue[tool].map(({ name, reason, colours }, index) => {
+    const swatches: Swatch[] = Object.values(colours).map((hex) => ({ name: hex, hex }));
     if (tool === "paint" && swatches.length === 1)
       swatches.push({ name: "Warm cream", hex: neutral.ceiling });
     return { id: name, starter: index, swatches, note: reason, tags: { ...tags[index], era: "Contemporary" } };
@@ -47,9 +46,11 @@ function card({ id, swatches }: Combination, selected?: Combination["id"]) {
 }
 
 function swatchOptions(combination: Combination, value: number, other: number) {
-  return combination.swatches.map(({ name, hex }, index) =>
-    `<option value="${index}" ${index === value ? "selected" : ""} ${index === other ? "disabled" : ""}>${escapeText(name)} · ${hex.toUpperCase()}</option>`,
-  ).join("");
+  return combination.swatches.map(({ name, hex }, index) => {
+    const code = hex.toUpperCase();
+    const caption = name === code ? code : `${escapeText(name)} · ${code}`;
+    return `<option value="${index}" ${index === value ? "selected" : ""} ${index === other ? "disabled" : ""}>${caption}</option>`;
+  }).join("");
 }
 
 export function mountCollection(

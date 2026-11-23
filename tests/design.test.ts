@@ -67,6 +67,16 @@ test("paint links preserve a custom door and default to matching without one", (
   for (const door of ["", "ABC", "102030&door=405060"])
     assert.equal(decode("paint", new URLSearchParams(base + "&door=" + door)), null);
 });
+test("feature-wall links accept one optional ceiling colour", () => {
+  const base = "mode=pair&room=living&pair=feature&wall=123456&feature=789ABC";
+  assert.equal(decode("paint", new URLSearchParams(base))?.colours.ceiling, "#F5F0E6");
+  const design = decode("paint", new URLSearchParams(base + "&ceiling=%23a1b2c3"))!;
+  assert.equal(design.colours.ceiling, "#A1B2C3");
+  assert.equal(shareParams("paint", design).get("ceiling"), "A1B2C3");
+  for (const ceiling of ["", "ABC", "A1B2C3&ceiling=F5F0E6"])
+    assert.equal(decode("paint", new URLSearchParams(base + "&ceiling=" + ceiling)), null);
+  assert.equal(decode("paint", new URLSearchParams(base.replace("pair=feature", "pair=ceiling"))), null);
+});
 test("old links get defaults and new links preserve lighting and theme", () => {
   const paint = "mode=single&room=living&wall=123456";
   const web = "mode=text&background=ffffff&text=000000";

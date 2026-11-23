@@ -27,7 +27,7 @@ const locks = new Set<Role>();
 let auditioning = false;
 let doorEditorOpen = false;
 let toneStart: { input: HTMLInputElement; value: string } | undefined;
-let paletteUndo: { design: Design; role: Role; trigger?: HTMLElement; selected: typeof selected; keepDoor: boolean } | null = null;
+let paletteUndo: { design: Design; role: Role; trigger?: HTMLElement; selected: typeof selected; keepCeiling: boolean; keepDoor: boolean } | null = null;
 const el = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const editLabel = (r: Role) =>
@@ -42,8 +42,11 @@ function persist() {
 function applyDesign(design: Design, announcement: string, trigger?: HTMLElement, selection?: typeof selected) {
   const active = document.activeElement === trigger;
   const surfacesChanged = paint && (design.mode !== d.mode || !!selection !== !!selected);
-  if (JSON.stringify(design) !== JSON.stringify(d))
-    paletteUndo = { design: structuredClone(d), role, trigger, selected, keepDoor: design.door === d.door };
+  if (JSON.stringify(design) !== JSON.stringify(d)) {
+    const keepCeiling = paint && design.mode === "pair" && design.pair === "feature" &&
+      d.mode === "pair" && d.pair === "feature" && design.colours.ceiling === d.colours.ceiling;
+    paletteUndo = { design: structuredClone(d), role, trigger, selected, keepCeiling, keepDoor: design.door === d.door };
+  }
   d = design;
   selected = selection;
   if (!editable(d).includes(role)) role = editable(d)[0];
@@ -131,9 +134,7 @@ function preview() {
 }
 
 function modes() {
-  const choices = paint
-    ? [["single", "Single colour"], ["pair", "Colour pair"]]
-    : [["text", "Text pair"], ["site", "Site palette"]];
+  const choices = [["text", "Text pair"], ["site", "Site palette"]];
   return `<div class="modes"><div class="segmented" role="group" aria-label="Palette mode">${choices.map(([value, name]) =>
     `<button type="button" id="mode-${value}" data-mode="${value}" aria-pressed="${d.mode === value}">${name}</button>`,
   ).join("")}</div></div>`;
@@ -143,8 +144,14 @@ function strip() {
   return editable(d).map((r) => {
     const current = el("tab-tune").getAttribute("aria-selected") === "true" && role === r;
     const locked = locks.has(r);
+    const explicitCeiling = d.mode === "pair" && d.pair === "feature" && r === "ceiling";
+    const name = explicitCeiling ? "Edit ceiling" : editLabel(r);
+    const value = d.colours[r];
     return `<div class="active-swatch">
-      <button type="button" id="role-${r}" data-role="${r}" class="tile" aria-pressed="${current}" aria-label="Tune ${editLabel(r)}" title="${editLabel(r)} ${d.colours[r]}">${chip(d.colours[r])}<span>${editLabel(r)}</span></button>
+      <label class="swatch-chip" for="role-${r}">${chip(value)}</label>
+      <button type="button" id="role-${r}" data-role="${r}" class="tile" aria-pressed="${current}" aria-label="${explicitCeiling ? name : "Edit " + name} ${value}">
+        <span>${name}</span><span class="swatch-value"><code>${value}</code>${explicitCeiling ? "" : icon("pen")}</span>
+      </button>
       <button type="button" id="lock-${r}" data-lock="${r}" class="lock" aria-pressed="${locked}" aria-label="Lock ${labels[r]}" title="${locked ? "Unlock" : "Lock"} ${labels[r]}">${icon(locked ? "lock" : "unlock")}</button>
     </div>`;
   }).join("");
@@ -217,6 +224,13 @@ function selectOptions<T extends string>(options: Record<T, string>, current: T)
   ).join("");
 }
 
+function radioGroup(name: string, label: string, options: Record<string, string>, current: string) {
+  return `<fieldset class="radio-group" id="${name}"><legend>${label}</legend>
+    <div class="radio-options">${Object.entries(options).map(([value, caption]) =>
+      `<label><input type="radio" name="${name}" id="${name}-${value}" value="${value}" ${value === current ? "checked" : ""}>${caption}</label>`,
+    ).join("")}</div></fieldset>`;
+}
+
 function paintSwatches() {
   if (!selected || d.mode !== "pair") return "";
   const { combination, wall, secondary } = selected;
@@ -237,17 +251,23 @@ function colourFields(value: string, label: string, prefix = "") {
 }
 
 function paintTools() {
+  const layout = radioGroup("paint-layout", "Paint layout",
+    { single: "One colour", ceiling: "Separate ceiling", feature: "Feature wall" },
+    d.mode === "single" ? "single" : d.pair);
+  const assignment = selected && d.mode === "pair"
+    ? `${selected.combination.swatches.length > 2 ? '<p class="swatch-help">Choose which two palette colours to apply.</p>' : ""}
+       <div class="swatch-fields" id="swatch-fields">${paintSwatches()}</div>` : "";
   return `<div class="canvas-heading"><h3 id="room-surfaces-title">Room surfaces</h3><small>Approximate lighting</small></div>
     <div class="canvas-fields">
+      ${layout}
       <div class="floor-control"><label>Existing floor <span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button type="button" id="reset-floor" class="outline" ${d.floor ? "" : "disabled"}>Reset floor</button></div>
-      ${d.mode === "pair" ? `<label>Surfaces<select id="pair" aria-label="Surfaces">${selectOptions({ ceiling: "Wall + ceiling", feature: "Main wall + feature wall" }, d.pair)}</select></label>` : ""}
       <div class="door-control">
         <div class="door-actions"><span><strong>Door</strong> <span id="door-value">${d.door ?? "Same as main wall"}</span></span>
           <button type="button" id="edit-door" class="outline" aria-controls="door-editor" aria-expanded="${doorEditorOpen}">Edit door colour</button>
           <button type="button" id="match-door" class="text-btn" ${d.door ? "" : "hidden"}>Match main wall</button></div>
         <div id="door-editor" ${doorEditorOpen ? "" : "hidden"}>${colourFields(d.door ?? d.colours.wall, "Door", "door-")}</div>
       </div>
-      ${selected && d.mode === "pair" ? `<div class="swatch-fields" id="swatch-fields">${paintSwatches()}</div>` : ""}
+      ${assignment}
       <div id="canvas-notes"></div>
     </div>`;
 }
@@ -280,7 +300,7 @@ function render(focus?: string) {
   toneStart = undefined;
   const previewControl = paint
     ? `<label>Room<select id="room-choice" aria-label="Room">${selectOptions(rooms, d.room)}</select></label>
-       <label>Lighting<select id="lighting" aria-label="Lighting">${selectOptions(lightingPresets, d.lighting)}</select></label>`
+       ${radioGroup("lighting", "Lighting", { ...lightingPresets, north: "North daylight", evening: "Warm evening" }, d.lighting)}`
     : `<label>Theme<select id="theme" aria-label="Theme">${selectOptions({ light: "Light", dark: "Dark" }, d.theme)}</select></label>
        <button type="button" class="text-btn" id="show-contrast">Check contrast</button><small id="assignment-count"></small>`;
   el("preview-card").innerHTML = `
@@ -290,7 +310,7 @@ function render(focus?: string) {
   if (paint) el("canvas-options").innerHTML = paintTools();
   el("role-strip").innerHTML = strip();
   const value = d.colours[role];
-  el("palette-fields").innerHTML = `${modes()}<div class="editing">
+  el("palette-fields").innerHTML = `${paint ? "" : modes()}<div class="editing">
       ${colourFields(value, editLabel(role))}
       <div class="tone-controls">
         <label>Lightness<input id="lightness" type="range" min="0" max="100" value="${Math.round(oklab(value)!.l * 100)}"></label>
@@ -483,6 +503,8 @@ document.addEventListener("click", (event) => {
   if (id === "undo-palette" && paletteUndo) {
     const previous = paletteUndo;
     const surfacesChanged = paint && (previous.design.mode !== d.mode || !!previous.selected !== !!selected);
+    if (previous.keepCeiling && d.mode === "pair" && d.pair === "feature")
+      previous.design.colours.ceiling = d.colours.ceiling;
     if (previous.keepDoor) previous.design.door = d.door;
     d = previous.design;
     role = previous.role;
@@ -575,15 +597,18 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("change", (event) => {
-  const input = event.target as HTMLSelectElement;
+  const input = event.target as HTMLInputElement | HTMLSelectElement;
   if (input.id === "format") { updateExport(); return; }
   if (input.id === "room-choice") d.room = input.value as Room;
-  else if (input.id === "lighting") d.lighting = input.value as Lighting;
+  else if (input.name === "lighting") d.lighting = input.value as Lighting;
   else if (input.id === "theme") d.theme = input.value as Theme;
-  else if (input.id === "pair") {
-    d.pair = input.value as Pair;
-    if (selected) d.colours[d.pair] = selected.combination.swatches[selected.secondary].hex.toUpperCase();
-    role = d.pair;
+  else if (input.name === "paint-layout") {
+    d.mode = input.value === "single" ? "single" : "pair";
+    if (d.mode === "single") role = "wall";
+    else {
+      d.pair = input.value as Pair;
+      role = d.pair;
+    }
     undo = null;
   } else if (input.dataset.swatchRole && selected) {
     const target = input.dataset.swatchRole as Role;
@@ -673,7 +698,7 @@ el("preview-card").addEventListener("click", (event) => {
   }
   let picked = target.closest<HTMLElement>("[data-canvas-role]")?.dataset.canvasRole as Role | undefined;
   if (surface === "wall" || surface === "feature") picked = d.mode === "pair" && d.pair === surface ? surface : "wall";
-  if (surface === "ceiling" && (d.mode === "single" || d.pair === "ceiling")) picked = d.mode === "single" ? "wall" : "ceiling";
+  if (surface === "ceiling") picked = d.mode === "single" ? "wall" : "ceiling";
   if (!picked) return;
   if (!paint && (picked === "accent" || picked === "onAccent") && d.mode === "text") {
     d.mode = "site";

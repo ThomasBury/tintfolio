@@ -64,7 +64,7 @@ export function editable(d: Design): Role[] {
     case "single":
       return ["wall"];
     case "pair":
-      return ["wall", d.pair];
+      return d.pair === "feature" ? ["wall", "feature", "ceiling"] : ["wall", "ceiling"];
     case "site":
       return ["background", "text", "accent", "onAccent"];
     default:
@@ -72,14 +72,12 @@ export function editable(d: Design): Role[] {
   }
 }
 export function ceilingColour(d: Design) {
-  if (d.mode === "single") return d.colours.wall;
-  return d.pair === "ceiling" ? d.colours.ceiling : neutral.ceiling;
+  return d.mode === "single" ? d.colours.wall : d.colours.ceiling;
 }
 export function palette(d: Design): [Role, string][] {
   const entries: [Role, string][] = editable(d).map((r) => [r, d.colours[r]]);
   if (d.mode === "single" || d.mode === "pair") {
-    if (!entries.some(([r]) => r === "ceiling"))
-      entries.push(["ceiling", ceilingColour(d)]);
+    if (d.mode === "single") entries.push(["ceiling", ceilingColour(d)]);
     entries.push(["trim", neutral.trim]);
   }
   return entries;
@@ -137,7 +135,8 @@ export function decode(tool: Tool, p: URLSearchParams): Design | null {
     d.theme = theme;
   }
   for (const r of editable(d)) {
-    const value = hex(p.get(r) || "");
+    const value = r === "ceiling" && d.pair === "feature" && !p.has(r)
+      ? neutral.ceiling : hex(p.get(r) || "");
     if (!value) return null;
     d.colours[r] = value;
   }

@@ -34,6 +34,7 @@ export interface Design {
   pair: Pair;
   colours: Record<Role, string>;
   floor?: string;
+  door?: string;
   lighting: Lighting;
   theme: Theme;
 }
@@ -63,7 +64,7 @@ export function editable(d: Design): Role[] {
     case "single":
       return ["wall"];
     case "pair":
-      return ["wall", d.pair];
+      return d.pair === "feature" ? ["wall", "feature", "ceiling"] : ["wall", "ceiling"];
     case "site":
       return ["background", "text", "accent", "onAccent"];
     default:
@@ -71,14 +72,12 @@ export function editable(d: Design): Role[] {
   }
 }
 export function ceilingColour(d: Design) {
-  if (d.mode === "single") return d.colours.wall;
-  return d.pair === "ceiling" ? d.colours.ceiling : neutral.ceiling;
+  return d.mode === "single" ? d.colours.wall : d.colours.ceiling;
 }
 export function palette(d: Design): [Role, string][] {
   const entries: [Role, string][] = editable(d).map((r) => [r, d.colours[r]]);
   if (d.mode === "single" || d.mode === "pair") {
-    if (!entries.some(([r]) => r === "ceiling"))
-      entries.push(["ceiling", ceilingColour(d)]);
+    if (d.mode === "single") entries.push(["ceiling", ceilingColour(d)]);
     entries.push(["trim", neutral.trim]);
   }
   return entries;
@@ -94,6 +93,7 @@ export function shareParams(tool: Tool, d: Design) {
     p.set("room", d.room);
     if (d.mode === "pair") p.set("pair", d.pair);
     if (d.floor) p.set("floor", d.floor.slice(1));
+    if (d.door) p.set("door", d.door.slice(1));
     p.set("lighting", d.lighting);
   } else p.set("theme", d.theme);
   for (const r of editable(d)) p.set(r, d.colours[r].slice(1));
@@ -124,13 +124,19 @@ export function decode(tool: Tool, p: URLSearchParams): Design | null {
       if (!floor) return null;
       d.floor = floor;
     }
+    if (p.has("door")) {
+      const door = hex(p.get("door") || "");
+      if (!door) return null;
+      d.door = door;
+    }
   } else {
     const theme = p.get("theme") ?? d.theme;
     if (theme !== "light" && theme !== "dark") return null;
     d.theme = theme;
   }
   for (const r of editable(d)) {
-    const value = hex(p.get(r) || "");
+    const value = r === "ceiling" && d.pair === "feature" && !p.has(r)
+      ? neutral.ceiling : hex(p.get(r) || "");
     if (!value) return null;
     d.colours[r] = value;
   }

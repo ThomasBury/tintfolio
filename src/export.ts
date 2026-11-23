@@ -41,7 +41,7 @@ export function sheet(d: Design) {
   }).join("");
   return `<h2 id="sheet-title">Paint spec sheet</h2>
     <p>${rooms[d.room]} · ${lightingPresets[d.lighting]}</p>
-    <table><thead><tr><th scope="col">Painted surface</th><th scope="col">HEX</th></tr></thead><tbody>${rows}</tbody></table>
+    <table><thead><tr><th scope="col">Painted surface</th><th scope="col">HEX</th></tr></thead><tbody>${rows}<tr><th scope="row">Door</th><td>${sample(d.door ?? d.colours.wall)}</td></tr></tbody></table>
     <p class="spec-floor"><strong>Existing floor</strong> ${sample(d.floor ?? defaultFloor)}</p>
     <p>Lighting is approximate. Check a physical paint sample in your room.</p>`;
 }

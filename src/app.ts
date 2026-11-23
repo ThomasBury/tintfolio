@@ -25,8 +25,9 @@ let undo: { role: Role; value: string } | null = null;
 let selected: { combination: Combination; wall: number; secondary: number; assignments: Assignment[] } | undefined;
 const locks = new Set<Role>();
 let auditioning = false;
+let doorEditorOpen = false;
 let toneStart: { input: HTMLInputElement; value: string } | undefined;
-let paletteUndo: { design: Design; role: Role; trigger?: HTMLElement; selected: typeof selected } | null = null;
+let paletteUndo: { design: Design; role: Role; trigger?: HTMLElement; selected: typeof selected; keepDoor: boolean } | null = null;
 const el = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const editLabel = (r: Role) =>
@@ -42,7 +43,7 @@ function applyDesign(design: Design, announcement: string, trigger?: HTMLElement
   const active = document.activeElement === trigger;
   const surfacesChanged = paint && (design.mode !== d.mode || !!selection !== !!selected);
   if (JSON.stringify(design) !== JSON.stringify(d))
-    paletteUndo = { design: structuredClone(d), role, trigger, selected };
+    paletteUndo = { design: structuredClone(d), role, trigger, selected, keepDoor: design.door === d.door };
   d = design;
   selected = selection;
   if (!editable(d).includes(role)) role = editable(d)[0];
@@ -227,11 +228,25 @@ function paintSwatches() {
     assignmentSelect(d.pair, combination, secondaryIndex, wallIndex, d.colours[d.pair]);
 }
 
+function colourFields(value: string, label: string, prefix = "") {
+  return `<label class="field-label" for="${prefix}hex">${label} <span>HEX</span></label>
+    <div class="field-row"><label class="picker"><input id="${prefix}picker" type="color" value="${value}" aria-label="Pick ${label} colour"></label>
+    <input class="hex-field" id="${prefix}hex" spellcheck="false" autocomplete="off" autocapitalize="characters" aria-describedby="${prefix}feedback" value="${value}">
+    ${prefix ? "" : `<button type="button" id="copy" class="outline">${icon("copy")}Copy</button>`}</div>
+    <p class="hex-feedback" id="${prefix}feedback" role="status"></p>`;
+}
+
 function paintTools() {
   return `<div class="canvas-heading"><h3 id="room-surfaces-title">Room surfaces</h3><small>Approximate lighting</small></div>
     <div class="canvas-fields">
       <div class="floor-control"><label>Existing floor <span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button type="button" id="reset-floor" class="outline" ${d.floor ? "" : "disabled"}>Reset floor</button></div>
       ${d.mode === "pair" ? `<label>Surfaces<select id="pair" aria-label="Surfaces">${selectOptions({ ceiling: "Wall + ceiling", feature: "Main wall + feature wall" }, d.pair)}</select></label>` : ""}
+      <div class="door-control">
+        <div class="door-actions"><span><strong>Door</strong> <span id="door-value">${d.door ?? "Same as main wall"}</span></span>
+          <button type="button" id="edit-door" class="outline" aria-controls="door-editor" aria-expanded="${doorEditorOpen}">Edit door colour</button>
+          <button type="button" id="match-door" class="text-btn" ${d.door ? "" : "hidden"}>Match main wall</button></div>
+        <div id="door-editor" ${doorEditorOpen ? "" : "hidden"}>${colourFields(d.door ?? d.colours.wall, "Door", "door-")}</div>
+      </div>
       ${selected && d.mode === "pair" ? `<div class="swatch-fields" id="swatch-fields">${paintSwatches()}</div>` : ""}
       <div id="canvas-notes"></div>
     </div>`;
@@ -276,10 +291,7 @@ function render(focus?: string) {
   el("role-strip").innerHTML = strip();
   const value = d.colours[role];
   el("palette-fields").innerHTML = `${modes()}<div class="editing">
-      <label class="field-label" for="hex">${editLabel(role)} <span>HEX</span></label>
-      <div class="field-row"><label class="picker"><input id="picker" type="color" value="${value}" aria-label="Pick ${editLabel(role)} colour"></label>
-      <input id="hex" spellcheck="false" autocomplete="off" autocapitalize="characters" aria-describedby="feedback" value="${value}"><button type="button" id="copy" class="outline">${icon("copy")}Copy</button></div>
-      <p id="feedback" role="status"></p>
+      ${colourFields(value, editLabel(role))}
       <div class="tone-controls">
         <label>Lightness<input id="lightness" type="range" min="0" max="100" value="${Math.round(oklab(value)!.l * 100)}"></label>
         <label>Warmth<input id="warmth" type="range" min="-32" max="32" value="${warmth(value)}"></label>
@@ -303,6 +315,11 @@ function updateColour(value: string, source: string) {
   }
   el("picture").innerHTML = preview();
   if (!paint) el("key").innerHTML = key();
+  else if (role === "wall" && !d.door) {
+    el<HTMLInputElement>("door-picker").value = value;
+    el<HTMLInputElement>("door-hex").value = value;
+    colourFeedback(el("door-hex"));
+  }
   el("role-strip").innerHTML = strip();
   el("advice").innerHTML = advice();
   const swatches = document.getElementById("swatch-fields");
@@ -312,8 +329,7 @@ function updateColour(value: string, source: string) {
   if (source !== "hex") el<HTMLInputElement>("hex").value = value;
   if (source !== "lightness") el<HTMLInputElement>("lightness").value = String(Math.round(oklab(value)!.l * 100));
   if (source !== "warmth") el<HTMLInputElement>("warmth").value = String(warmth(value));
-  el("feedback").textContent = "";
-  el("hex").removeAttribute("aria-invalid");
+  colourFeedback(el("hex"));
 }
 
 function updateFloor(value: string) {
@@ -323,11 +339,43 @@ function updateFloor(value: string) {
   persist();
 }
 
-function validate(reveal = false) {
-  if (hex(el<HTMLInputElement>("hex").value)) return;
-  el("feedback").textContent = "Enter six HEX digits, for example #A9B39E.";
-  el("hex").setAttribute("aria-invalid", "true");
-  if (reveal) el("feedback").scrollIntoView({ block: "center" });
+function setDoorEditor(open: boolean) {
+  audition();
+  doorEditorOpen = open;
+  el("edit-door").setAttribute("aria-expanded", String(open));
+  el("door-editor").hidden = !open;
+  const target = el(open ? "door-hex" : "edit-door");
+  target.scrollIntoView({ block: "nearest" });
+  target.focus({ preventScroll: true });
+}
+
+function updateDoor(value: string | undefined, source?: string) {
+  d.door = value;
+  const style = el("room").style;
+  if (value) style.setProperty("--door", value);
+  else style.removeProperty("--door");
+  const colour = value ?? d.colours.wall;
+  el<HTMLInputElement>("door-picker").value = colour;
+  const field = el<HTMLInputElement>("door-hex");
+  if (source !== field.id) field.value = colour;
+  colourFeedback(field);
+  el("door-value").textContent = value ?? "Same as main wall";
+  el("match-door").hidden = !value;
+  persist();
+}
+
+function colourFeedback(input: HTMLElement, message = "") {
+  const feedback = el(input.getAttribute("aria-describedby")!);
+  feedback.textContent = message;
+  if (message) input.setAttribute("aria-invalid", "true");
+  else input.removeAttribute("aria-invalid");
+  return feedback;
+}
+
+function validate(input: HTMLInputElement, reveal = false) {
+  if (hex(input.value)) return;
+  const feedback = colourFeedback(input, "Enter six HEX digits, for example #A9B39E.");
+  if (reveal) feedback.scrollIntoView({ block: "center" });
 }
 
 async function copy(value: string, button: HTMLElement, message: string) {
@@ -435,6 +483,7 @@ document.addEventListener("click", (event) => {
   if (id === "undo-palette" && paletteUndo) {
     const previous = paletteUndo;
     const surfacesChanged = paint && (previous.design.mode !== d.mode || !!previous.selected !== !!selected);
+    if (previous.keepDoor) previous.design.door = d.door;
     d = previous.design;
     role = previous.role;
     selected = previous.selected;
@@ -498,6 +547,11 @@ document.addEventListener("click", (event) => {
     el<HTMLInputElement>("floor").value = defaultFloor;
     updateFloor(defaultFloor);
     el("floor").focus();
+  } else if (id === "edit-door") {
+    setDoorEditor(!doorEditorOpen);
+  } else if (id === "match-door") {
+    setDoorEditor(false);
+    updateDoor(undefined);
   } else if (id === "copy") void copy(d.colours[role], button, "HEX copied.");
   else if (id === "share") {
     const url = new URL(location.pathname, location.origin);
@@ -547,13 +601,13 @@ document.addEventListener("input", (event) => {
   if (input.id === "floor") {
     const value = hex(input.value);
     if (value) updateFloor(value);
-  } else if (input.id === "hex" || input.id === "picker") {
+  } else if (input.matches(".hex-field, #picker, #door-picker")) {
     const value = hex(input.value);
-    if (value) updateColour(value, input.id);
-    else {
-      el("feedback").textContent = "";
-      input.removeAttribute("aria-invalid");
+    if (!value) {
+      if (input.matches(".hex-field")) colourFeedback(input);
     }
+    else if (input.id.startsWith("door-")) updateDoor(value, input.id);
+    else updateColour(value, input.id);
   } else if (input.id === "lightness" || input.id === "warmth") {
     if (toneStart?.input !== input) toneStart = { input, value: d.colours[role] };
     const base = oklab(toneStart.value)!;
@@ -563,7 +617,8 @@ document.addEventListener("input", (event) => {
   }
 });
 document.addEventListener("focusout", (event) => {
-  if ((event.target as Element).id === "hex") validate();
+  const input = event.target as HTMLInputElement;
+  if (input.matches(".hex-field")) validate(input);
   if (toneStart && event.target === toneStart.input) {
     const { input } = toneStart;
     const value = d.colours[role];
@@ -572,7 +627,8 @@ document.addEventListener("focusout", (event) => {
   }
 });
 document.addEventListener("keydown", (event) => {
-  if ((event.target as Element).id === "hex" && event.key === "Enter") validate(true);
+  const input = event.target as HTMLInputElement;
+  if (event.key === "Enter" && input.matches(".hex-field")) validate(input, true);
 });
 el("studio").addEventListener("keydown", (event) => {
   const target = event.target as HTMLElement;
@@ -605,6 +661,10 @@ el("preview-card").addEventListener("click", (event) => {
   }
   if (target.closest("input, label, select, summary")) return;
   const surface = target.closest<SVGElement>("[data-surface]")?.dataset.surface;
+  if (surface === "door") {
+    setDoorEditor(true);
+    return;
+  }
   if (surface === "floor") {
     const floor = el("floor");
     floor.scrollIntoView({ block: "nearest" });

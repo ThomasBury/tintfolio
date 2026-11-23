@@ -34,6 +34,7 @@ export interface Design {
   pair: Pair;
   colours: Record<Role, string>;
   floor?: string;
+  door?: string;
   lighting: Lighting;
   theme: Theme;
 }
@@ -94,6 +95,7 @@ export function shareParams(tool: Tool, d: Design) {
     p.set("room", d.room);
     if (d.mode === "pair") p.set("pair", d.pair);
     if (d.floor) p.set("floor", d.floor.slice(1));
+    if (d.door) p.set("door", d.door.slice(1));
     p.set("lighting", d.lighting);
   } else p.set("theme", d.theme);
   for (const r of editable(d)) p.set(r, d.colours[r].slice(1));
@@ -123,6 +125,11 @@ export function decode(tool: Tool, p: URLSearchParams): Design | null {
       const floor = hex(p.get("floor") || "");
       if (!floor) return null;
       d.floor = floor;
+    }
+    if (p.has("door")) {
+      const door = hex(p.get("door") || "");
+      if (!door) return null;
+      d.door = door;
     }
   } else {
     const theme = p.get("theme") ?? d.theme;

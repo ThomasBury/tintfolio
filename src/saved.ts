@@ -52,7 +52,8 @@ export function mountSaved(tool: Tool, current: () => Design, restore: (design: 
     grid.innerHTML = entries.map((value, index) => {
       const design = decode(tool, new URLSearchParams(value))!;
       const swatches = tool === "paint"
-        ? [...palette(design).map(([role, hex]) => [labels[role], hex]), ["Existing floor", design.floor ?? defaultFloor]]
+        ? [...palette(design).map(([role, hex]) => [labels[role], hex]),
+            ...(design.door ? [["Door", design.door]] : []), ["Existing floor", design.floor ?? defaultFloor]]
         : Object.entries(resolveWeb(design)).map(([name, hex]) => [tokenLabels[name as Token], hex]);
       const subtitle = tool === "paint"
         ? `${rooms[design.room]} · ${lightingPresets[design.lighting]}`

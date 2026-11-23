@@ -86,6 +86,70 @@ test("paint reassigns and swaps roles on the canvas, and prints its surface colo
   await expect(dialog.getByRole("table")).toBeVisible();
 });
 
+test("the door follows the right main wall or keeps a custom colour through palette changes", async ({ page }) => {
+  await page.goto("/paint/?mode=pair&room=living&pair=feature&wall=123456&feature=998877");
+  const surfaces = page.getByRole("region", { name: "Room surfaces" });
+  const door = fill(page, "door");
+  const rightWall = page.locator('[data-surface="wall"]').last();
+  const wallFill = () => rightWall.evaluate((node) => getComputedStyle(node).fill);
+  const edit = surfaces.getByRole("button", { name: "Edit door colour" });
+  const match = surfaces.getByRole("button", { name: "Match main wall" });
+  const hex = surfaces.getByLabel("Door HEX");
+  const picker = surfaces.getByLabel("Pick Door colour");
+  await expect(surfaces.getByText("Same as main wall")).toBeVisible();
+  await expect(door).toHaveCSS("fill", await wallFill());
+  await expect(fill(page, "feature")).toHaveCSS("fill", rgb("#998877"));
+  expect((await door.boundingBox())!.x).toBeGreaterThan((await rightWall.boundingBox())!.x);
+  await expect(hex).toBeHidden();
+
+  const card = await find(page, "#344");
+  await card.hover();
+  await expect(door).toHaveCSS("fill", rgb("#FDC57E"));
+  await edit.press("Enter");
+  await expect(hex).toBeFocused();
+  await expect(hex).toHaveValue("#123456");
+  await hex.fill("#AB");
+  await hex.press("Enter");
+  await expect(hex).toHaveAttribute("aria-invalid", "true");
+  await expect(door).toHaveCSS("fill", rgb("#123456"));
+  await hex.fill("#2468ac");
+  await expect(picker).toHaveValue("#2468ac");
+  await expect(door).toHaveCSS("fill", rgb("#2468AC"));
+  await card.hover();
+  await expect(rightWall).toHaveCSS("fill", rgb("#FDC57E"));
+  await expect(door).toHaveCSS("fill", rgb("#2468AC"));
+  await card.click();
+  await picker.fill("#8642ac");
+  await expect(hex).toHaveValue("#8642AC");
+  await page.getByRole("button", { name: "Undo palette" }).click();
+  await expect(rightWall).toHaveCSS("fill", rgb("#123456"));
+  await expect(door).toHaveCSS("fill", rgb("#8642AC"));
+  await expect(page.getByRole("group", { name: "Active swatches" }).getByRole("button", { name: /door/i })).toHaveCount(0);
+
+  await page.reload();
+  await expect(door).toHaveCSS("fill", rgb("#8642AC"));
+  const link = await share(page);
+  expect(new URL(link).searchParams.get("door")).toBe("8642AC");
+  await page.getByRole("button", { name: "Saved swatches" }).click();
+  await page.getByRole("button", { name: "Save current design" }).click();
+  await expect(page.getByRole("dialog").getByText("Door #8642AC")).toBeVisible();
+  await close(page);
+  await match.click();
+  await expect(edit).toBeFocused();
+  await expect(match).toBeHidden();
+  await expect(surfaces.getByText("Same as main wall")).toBeVisible();
+  await expect(door).toHaveCSS("fill", await wallFill());
+  await page.locator("#role-wall").click();
+  await page.getByLabel("Main wall HEX").fill("#2468AC");
+  await expect(door).toHaveCSS("fill", rgb("#2468AC"));
+  await door.click();
+  await expect(hex).toBeFocused();
+  await expect(hex).toHaveValue("#2468AC");
+  await page.getByRole("button", { name: "Saved swatches" }).click();
+  await page.getByRole("button", { name: "Restore design 1" }).click();
+  await expect(door).toHaveCSS("fill", rgb("#8642AC"));
+});
+
 test("manual paint edits are reflected in the canvas swatch controls", async ({ page }) => {
   await page.goto("/paint/");
   await (await find(page, "#344")).click();

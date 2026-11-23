@@ -33,6 +33,7 @@ test("reject incomplete colours, invalid rooms, duplicate and inactive roles", (
     "mode=text&background=ffffff&text=123456&text=ffffff",
     "mode=text&background=ffffff&text=000000&accent=000000",
     "mode=text&background=ffffff&text=000000&floor=d2b18c",
+    "mode=text&background=ffffff&text=000000&door=d2b18c",
   ])
     assert.equal(decode("web", new URLSearchParams(search)), null);
   assert.equal(
@@ -54,6 +55,17 @@ test("paint links accept one optional existing floor colour", () => {
   for (const floor of ["", "ABC", "102030&floor=405060"]) {
     assert.equal(decode("paint", new URLSearchParams(base + "&floor=" + floor)), null);
   }
+});
+test("paint links preserve a custom door and default to matching without one", () => {
+  const base = "mode=single&room=living&wall=a9b39e";
+  const matching = decode("paint", new URLSearchParams(base))!;
+  assert.equal(matching.door, undefined);
+  assert.equal(shareParams("paint", matching).has("door"), false);
+  const custom = decode("paint", new URLSearchParams(base + "&door=%23a9b39e"))!;
+  assert.equal(custom.door, "#A9B39E");
+  assert.equal(shareParams("paint", custom).get("door"), "A9B39E");
+  for (const door of ["", "ABC", "102030&door=405060"])
+    assert.equal(decode("paint", new URLSearchParams(base + "&door=" + door)), null);
 });
 test("old links get defaults and new links preserve lighting and theme", () => {
   const paint = "mode=single&room=living&wall=123456";
@@ -82,8 +94,10 @@ test("paint spec lists rendered surfaces and puts the existing floor outside the
   assert.match(table, /Feature wall.*#657F89/);
   assert.match(table, /Ceiling.*#F5F0E6/);
   assert.match(table, /Trim.*#EBE4D7/);
+  assert.match(table, /Door.*#C3D0D0/);
   assert.doesNotMatch(table, /#123456/);
   assert.match(floor, /Existing floor.*#123456/);
+  assert.match(sheet({ ...d, door: "#2468AC" }), /Door.*#2468AC/);
 });
 
 test("HEX, OKLCH, Tailwind and DTCG export the rendered light and dark tokens", () => {

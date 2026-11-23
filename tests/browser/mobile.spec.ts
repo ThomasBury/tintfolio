@@ -103,6 +103,27 @@ test("floor editing stays independent and the print spec fits at 320 pixels", as
   expect(await dialog.evaluate((node) => node.scrollWidth)).toBe(await dialog.evaluate((node) => node.clientWidth));
 });
 
+test("the door colour editor fits beside the sticky room preview on mobile", async ({ page }) => {
+  await page.goto("/paint/");
+  const surfaces = page.getByRole("region", { name: "Room surfaces" });
+  const edit = surfaces.getByRole("button", { name: "Edit door colour" });
+  const hex = surfaces.getByLabel("Door HEX");
+  await edit.tap();
+  await expect(edit).toHaveAttribute("aria-expanded", "true");
+  await expect(hex).toBeFocused();
+  await onScreen(hex);
+  await onScreen(page.locator("#room"));
+  await hex.fill("#4C6571");
+  await expect(page.locator('[data-surface="door"]')).toHaveCSS("fill", "rgb(76, 101, 113)");
+  await onScreen(hex);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  await surfaces.getByRole("button", { name: "Match main wall" }).tap();
+  await expect(edit).toHaveAttribute("aria-expanded", "false");
+  await expect(edit).toBeFocused();
+  await expect(hex).toBeHidden();
+  await expect(surfaces.getByText("Same as main wall")).toBeVisible();
+});
+
 test("the Website activity chart and report action fit the 320-pixel preview", async ({ page }) => {
   await page.goto("/web/");
   const chart = page.getByRole("list", { name: "Projects per week" });

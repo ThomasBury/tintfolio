@@ -4,6 +4,7 @@ import { combinationName, hasSourceContrast, matchingCombinations, randomCombina
 
 const pageSize = 24;
 const websiteSwatchOrder = [3, 4, 2];
+const paintSwatchOrder = [2, 3, 4];
 declare const __FEATURED_COMBINATIONS__: Combination[];
 const featured = __FEATURED_COMBINATIONS__.map((combination) => ({
   ...combination, tags: { era: "Early Shōwa" },
@@ -51,10 +52,11 @@ function swatchOptions(combination: Combination, value: number, other: number) {
 export function mountCollection(
   library: HTMLElement,
   tool: Tool,
+  mobileLayout: MediaQueryList,
   apply: (combination: Combination, trigger?: HTMLButtonElement) => void,
   audition: (combination?: Combination) => void,
 ) {
-  const website = tool === "web";
+  const swatchOrder = tool === "web" ? websiteSwatchOrder : paintSwatchOrder;
   library.innerHTML = `
     <div class="library-search">
       <label><span>Search palettes</span><input id="wada-search" type="search" placeholder="HEX, name or #48"></label>
@@ -73,9 +75,15 @@ export function mountCollection(
         ${tool === "web" ? '<option value="contrast">High Contrast</option>' : ""}
       </select></label>
     </div>
-    ${website ? '<div class="library-results-frame"><div class="library-results"><div class="library-results-content">' : ""}
+    <div class="library-results-frame"><div class="library-results"><div class="library-results-content">
     <div class="library-loading"><p id="wada-load" role="status"></p><button type="button" class="outline" id="wada-retry" hidden>Retry</button></div>
-    <p id="wada-results-status" role="status"></p>
+    <div id="wada-recovery">
+      <p id="wada-results-status" role="status"></p>
+      <div class="library-empty-actions">
+        <button type="button" class="text-btn" id="wada-clear-search" hidden>Clear search</button>
+        <button type="button" class="text-btn" id="wada-clear-filters" hidden>Clear filters</button>
+      </div>
+    </div>
     <div class="wada-grid" id="wada-results"></div>
     <button type="button" class="outline" id="wada-more">Load more</button>
     <footer class="wada-credit">Wada combinations come from Sanzo Wada’s
@@ -84,7 +92,7 @@ export function mountCollection(
       <a href="https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4">Dataset and conversion notes</a> ·
       <a href="/wada-license.txt">MIT notice</a>
     </footer>
-    ${website ? "</div></div></div>" : ""}`;
+    </div></div></div>`;
 
   const el = <T extends HTMLElement = HTMLElement>(id: string) =>
     library.querySelector<T>("#wada-" + id)!;
@@ -92,16 +100,21 @@ export function mountCollection(
   const source = el<HTMLSelectElement>("source");
   const count = el<HTMLSelectElement>("count");
   const style = el<HTMLSelectElement>("style");
+  const filterInputs = [source, count, style];
   const filters = el("filters");
   const filtersToggle = el<HTMLButtonElement>("filters-toggle");
   const results = el("results");
   const random = el<HTMLButtonElement>("random");
   const more = el<HTMLButtonElement>("more");
   const retry = el<HTMLButtonElement>("retry");
-  const resultsScroll = library.querySelector<HTMLElement>(".library-results");
+  const clearSearch = el<HTMLButtonElement>("clear-search");
+  const clearFilters = el<HTMLButtonElement>("clear-filters");
+  const resultsScroll = library.querySelector<HTMLElement>(".library-results")!;
   const recommended = tool === "paint" ? "Nordic Limewash" : "Developer Docs";
+  const starterCards = starters(tool);
+  const websiteStarter = tool === "web" ? starterCards.find(({ swatches }) => swatches.length === 4) : undefined;
   const curated = [
-    ...starters(tool), ...namedCombinations.filter(({ id }) => id === recommended),
+    ...starterCards, ...namedCombinations.filter(({ id }) => id === recommended),
     ...featured, ...namedCombinations.filter(({ id }) => id !== recommended),
   ];
   let collection: Combination[] = curated;
@@ -112,6 +125,7 @@ export function mountCollection(
   let loaded = false;
   let loading = false;
   let failed = false;
+  const activeFilters = () => filterInputs.filter((input) => input.selectedIndex > 0).length;
 
   function setSelected(id?: Combination["id"]) {
     selected = id;
@@ -122,17 +136,20 @@ export function mountCollection(
 
   function updateControls() {
     const shown = Math.min(visible, matches.length);
+    const noMatches = !matches.length && !loading;
+    const filterCount = activeFilters();
+    filtersToggle.textContent = filterCount ? `Filters (${filterCount})` : "Filters";
     el("results-status").textContent = matches.length
       ? `${shown} of ${matches.length} ${loaded ? "" : "available "}combinations`
-      : "No matching combinations";
+      : noMatches ? "No matching combinations" : "";
+    clearSearch.hidden = !noMatches || !search.value.trim();
+    clearFilters.hidden = !noMatches || !filterCount;
     more.hidden = (loaded && shown >= matches.length) || failed;
     random.disabled = matches.length === 0;
   }
 
   function filter() {
     audition();
-    const activeFilters = [source.value, Number(count.value), style.value].filter(Boolean).length;
-    filtersToggle.textContent = activeFilters ? `Filters (${activeFilters})` : "Filters";
     matches = matchingCombinations(collection, Number(count.value), search.value).filter((item) => {
       if (source.value && source.value !== (typeof item.id === "number" ? "wada" : "curated")) return false;
       if (style.value === "bold") return item.tags?.mood === "Bold";
@@ -141,8 +158,12 @@ export function mountCollection(
       return true;
     });
     // Keep the catalogue order for the workspace's previous and next shortcuts.
-    resultsOrder = tool === "web" ? [...matches].sort((a, b) =>
-      websiteSwatchOrder.indexOf(a.swatches.length) - websiteSwatchOrder.indexOf(b.swatches.length)) : matches;
+    resultsOrder = [...matches].sort((a, b) =>
+      swatchOrder.indexOf(a.swatches.length) - swatchOrder.indexOf(b.swatches.length));
+    if (websiteStarter && mobileLayout.matches && !search.value.trim() && !activeFilters()) {
+      resultsOrder.splice(resultsOrder.indexOf(websiteStarter), 1);
+      resultsOrder.unshift(websiteStarter);
+    }
     const focused = document.activeElement instanceof HTMLButtonElement && results.contains(document.activeElement)
       ? document.activeElement.dataset.combination : undefined;
     results.innerHTML = resultsOrder.slice(0, visible).map((item) => card(item, selected)).join("");
@@ -158,6 +179,7 @@ export function mountCollection(
     loading = true;
     el("load").textContent = "Loading Wada combinations…";
     more.setAttribute("aria-busy", "true");
+    updateControls();
     try {
       const response = await fetch("/wada-combinations.json");
       if (!response.ok) throw new Error("Could not load collection");
@@ -171,10 +193,10 @@ export function mountCollection(
       el("load").textContent = "The Wada combinations could not be loaded. Curated palettes are still available.";
       retry.hidden = false;
       if (document.activeElement === more) retry.focus();
-      updateControls();
     } finally {
       loading = false;
       more.removeAttribute("aria-busy");
+      updateControls();
     }
   }
 
@@ -212,13 +234,24 @@ export function mountCollection(
     filtersToggle.setAttribute("aria-expanded", String(!filters.hidden));
   });
   search.addEventListener("input", reset);
-  for (const input of [source, count, style]) input.addEventListener("change", reset);
+  for (const input of filterInputs) input.addEventListener("change", reset);
+  if (websiteStarter) mobileLayout.addEventListener("change", filter);
   function reset() {
-    if (resultsScroll) resultsScroll.scrollTop = 0;
+    resultsScroll.scrollTop = 0;
     visible = pageSize;
     filter();
     void load();
   }
+  clearSearch.addEventListener("click", () => {
+    search.value = "";
+    reset();
+    search.focus();
+  });
+  clearFilters.addEventListener("click", () => {
+    for (const input of filterInputs) input.selectedIndex = 0;
+    reset();
+    search.focus();
+  });
   retry.addEventListener("click", async () => {
     failed = false;
     await load();
@@ -256,18 +289,16 @@ export function mountCollection(
   }
   window.addEventListener("blur", () => audition());
 
-  if (resultsScroll) {
-    const frame = resultsScroll.parentElement!;
-    const updateFades = () => {
-      const { scrollTop, scrollHeight, clientHeight } = resultsScroll;
-      frame.toggleAttribute("data-fade-top", scrollTop > 1);
-      frame.toggleAttribute("data-fade-bottom", scrollHeight - clientHeight - scrollTop > 1);
-    };
-    const size = new ResizeObserver(updateFades);
-    size.observe(resultsScroll);
-    size.observe(resultsScroll.firstElementChild!);
-    resultsScroll.addEventListener("scroll", updateFades, { passive: true });
-  }
+  const frame = resultsScroll.parentElement!;
+  const updateFades = () => {
+    const { scrollTop, scrollHeight, clientHeight } = resultsScroll;
+    frame.toggleAttribute("data-fade-top", scrollTop > 1);
+    frame.toggleAttribute("data-fade-bottom", scrollHeight - clientHeight - scrollTop > 1);
+  };
+  const size = new ResizeObserver(updateFades);
+  size.observe(resultsScroll);
+  size.observe(resultsScroll.firstElementChild!);
+  resultsScroll.addEventListener("scroll", updateFades, { passive: true });
 
   filter();
   void load();

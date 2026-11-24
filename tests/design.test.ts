@@ -67,15 +67,26 @@ test("paint links preserve a custom door and default to matching without one", (
   for (const door of ["", "ABC", "102030&door=405060"])
     assert.equal(decode("paint", new URLSearchParams(base + "&door=" + door)), null);
 });
-test("feature-wall links accept one optional ceiling colour", () => {
+test("paired Paint links preserve the ceiling value and automatic or manual assignment", () => {
   const base = "mode=pair&room=living&pair=feature&wall=123456&feature=789ABC";
-  assert.equal(decode("paint", new URLSearchParams(base))?.colours.ceiling, "#F5F0E6");
+  const fallback = decode("paint", new URLSearchParams(base))!;
+  assert.equal(fallback.colours.ceiling, "#F5F0E6");
+  assert.equal(fallback.ceilingMode, "auto");
   const design = decode("paint", new URLSearchParams(base + "&ceiling=%23a1b2c3"))!;
   assert.equal(design.colours.ceiling, "#A1B2C3");
+  assert.equal(design.ceilingMode, "manual");
   assert.equal(shareParams("paint", design).get("ceiling"), "A1B2C3");
+  assert.equal(shareParams("paint", design).has("ceilingMode"), false);
+  const automatic = decode("paint", new URLSearchParams(base + "&ceiling=A1B2C3&ceilingMode=auto"))!;
+  assert.equal(automatic.colours.ceiling, "#A1B2C3");
+  assert.equal(automatic.ceilingMode, "auto");
+  assert.equal(shareParams("paint", automatic).get("ceilingMode"), "auto");
   for (const ceiling of ["", "ABC", "A1B2C3&ceiling=F5F0E6"])
     assert.equal(decode("paint", new URLSearchParams(base + "&ceiling=" + ceiling)), null);
+  for (const mode of ["manual", "", "auto&ceilingMode=auto"])
+    assert.equal(decode("paint", new URLSearchParams(base + "&ceilingMode=" + mode)), null);
   assert.equal(decode("paint", new URLSearchParams(base.replace("pair=feature", "pair=ceiling"))), null);
+  assert.equal(decode("paint", new URLSearchParams("mode=pair&room=living&pair=ceiling&wall=123456"))?.colours.ceiling, "#F5F0E6");
 });
 test("old links get defaults and new links preserve lighting and theme", () => {
   const paint = "mode=single&room=living&wall=123456";

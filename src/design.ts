@@ -3,6 +3,7 @@ import examples from "./examples.json" with { type: "json" };
 export type Tool = "paint" | "web";
 export type Room = "living" | "bedroom" | "kitchen";
 export type Pair = "ceiling" | "feature";
+export type CeilingMode = "auto" | "manual";
 export const lightingPresets = {
   north: "North-facing daylight",
   golden: "Golden hour",
@@ -32,6 +33,7 @@ export interface Design {
   mode: string;
   room: Room;
   pair: Pair;
+  ceilingMode: CeilingMode;
   colours: Record<Role, string>;
   floor?: string;
   door?: string;
@@ -47,6 +49,7 @@ export function example(tool: Tool, index = 0, room: Room = "living"): Design {
     lighting: "north",
     theme: "light",
     pair: "pair" in item && item.pair === "feature" ? "feature" : "ceiling",
+    ceilingMode: "auto",
     colours: {
       wall: "#A9B39E",
       ...neutral,
@@ -58,6 +61,17 @@ export function example(tool: Tool, index = 0, room: Room = "living"): Design {
       ...item.colours,
     },
   };
+}
+
+function startingPalette(tool: Tool) {
+  const design = example(tool);
+  if (tool === "web") {
+    design.mode = "site";
+    Object.assign(design.colours, {
+      background: "#F8F7F2", text: "#1C1F2A", accent: "#F16AB7", onAccent: "#000000",
+    });
+  }
+  return design;
 }
 export function editable(d: Design): Role[] {
   switch (d.mode) {
@@ -91,7 +105,10 @@ export function shareParams(tool: Tool, d: Design) {
   const p = new URLSearchParams({ mode: d.mode });
   if (tool === "paint") {
     p.set("room", d.room);
-    if (d.mode === "pair") p.set("pair", d.pair);
+    if (d.mode === "pair") {
+      p.set("pair", d.pair);
+      if (d.ceilingMode === "auto") p.set("ceilingMode", "auto");
+    }
     if (d.floor) p.set("floor", d.floor.slice(1));
     if (d.door) p.set("door", d.door.slice(1));
     p.set("lighting", d.lighting);
@@ -118,6 +135,9 @@ export function decode(tool: Tool, p: URLSearchParams): Design | null {
       const pair = p.get("pair");
       if (pair !== "ceiling" && pair !== "feature") return null;
       d.pair = pair;
+      const ceilingMode = p.get("ceilingMode");
+      if (ceilingMode !== "auto" && ceilingMode !== null) return null;
+      d.ceilingMode = ceilingMode === "auto" || !p.has("ceiling") ? "auto" : "manual";
     }
     if (p.has("floor")) {
       const floor = hex(p.get("floor") || "");
@@ -135,7 +155,7 @@ export function decode(tool: Tool, p: URLSearchParams): Design | null {
     d.theme = theme;
   }
   for (const r of editable(d)) {
-    const value = r === "ceiling" && d.pair === "feature" && !p.has(r)
+    const value = r === "ceiling" && !p.has(r)
       ? neutral.ceiling : hex(p.get(r) || "");
     if (!value) return null;
     d.colours[r] = value;
@@ -154,7 +174,7 @@ function sessionKey(tool: Tool, preset?: string) {
 }
 
 export function startDesign(tool: Tool, preset?: string) {
-  const fallback = (preset && decode(tool, new URLSearchParams(preset))) || example(tool);
+  const fallback = (preset && decode(tool, new URLSearchParams(preset))) || startingPalette(tool);
   const search = location.search;
   if (search) {
     const design = decode(tool, new URLSearchParams(search));
@@ -182,7 +202,12 @@ export function startDesign(tool: Tool, preset?: string) {
           ...saved.colours,
           ...Object.fromEntries(editable(d).map((r) => [r, d.colours[r]])),
         };
-        if (saved.pair === "feature" && d.mode === "single") d.pair = "feature";
+        if (tool === "paint" && d.mode === "single") {
+          if (saved.pair === "feature") d.pair = "feature";
+          if (saved.ceilingMode === "manual" ||
+            (saved.ceilingMode === undefined && d.pair === "feature" && d.colours.ceiling !== neutral.ceiling))
+            d.ceilingMode = "manual";
+        }
         return { design: d, notice: "" };
       }
     }
@@ -199,6 +224,7 @@ export function save(tool: Tool, d: Design, preset?: string) {
         active: shareParams(tool, d).toString(),
         colours: d.colours,
         pair: d.pair,
+        ...(tool === "paint" && d.mode === "single" ? { ceilingMode: d.ceilingMode } : {}),
       }),
     );
   } catch {

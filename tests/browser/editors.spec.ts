@@ -54,6 +54,57 @@ test("combination #48 applies on the sticky room, preserves room and floor, and 
   await expect(fill(page, "feature")).toHaveCSS("fill", rgb("#998877"));
 });
 
+test("wheel auditions screen positions while Feature wall selection commits its own ceiling", async ({ page }) => {
+  await page.goto("/paint/?mode=pair&room=living&pair=feature&wall=123456&feature=998877");
+  await expect(page.locator("#wada-results-status")).toHaveText(/of \d+ combinations/);
+  const card = (id: number) => page.locator(`[data-combination="${id}"]`);
+  const more = page.locator("#wada-more");
+  while (!(await card(121).count())) {
+    await expect(more).toBeVisible();
+    await more.evaluate((button: HTMLButtonElement) => button.click());
+  }
+
+  const ceiling = fill(page, "ceiling");
+  await card(121).press("Enter");
+  await expect(ceiling).toHaveCSS("fill", rgb("#555832"));
+  const session = await page.evaluate(() => sessionStorage.getItem("tintfolio-paint"));
+  const results = page.locator(".library-results");
+  const frame = results.locator("..");
+  await results.evaluate((node) => {
+    const row = node.querySelector('[data-combination="121"]')!.getBoundingClientRect();
+    node.scrollTop += row.top + row.height / 2 - (node.getBoundingClientRect().top + 100);
+  });
+  const box = (await results.boundingBox())!;
+  const pointer = { x: box.x + box.width / 2, y: box.y + 100 };
+  await page.mouse.move(pointer.x, pointer.y);
+  const wheelTo = async (id: number, expected: string) => {
+    const row = (await card(id).boundingBox())!;
+    await page.mouse.wheel(0, row.y + row.height / 2 - pointer.y);
+    await expect.poll(() => page.evaluate(({ x, y }) =>
+      document.elementFromPoint(x, y)?.closest(".wada-card")?.getAttribute("data-combination"), pointer)).toBe(String(id));
+    await expect(ceiling).toHaveCSS("fill", rgb(expected));
+  };
+
+  await wheelTo(48, "#F5F0E6");
+  await expect(frame).toHaveAttribute("data-fade-top", "");
+  await expect(card(121)).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => sessionStorage.getItem("tintfolio-paint"))).toBe(session);
+  await page.mouse.move(box.x - 25, pointer.y);
+  await expect(ceiling).toHaveCSS("fill", rgb("#555832"));
+  await page.mouse.click(pointer.x, pointer.y);
+  await expect(card(48)).toHaveAttribute("aria-pressed", "true");
+  await expect(ceiling).toHaveCSS("fill", rgb("#F5F0E6"));
+
+  await wheelTo(125, "#40456A");
+  await expect(card(48)).toHaveAttribute("aria-pressed", "true");
+  await page.mouse.click(pointer.x, pointer.y);
+  await expect(card(125)).toHaveAttribute("aria-pressed", "true");
+  await expect(ceiling).toHaveCSS("fill", rgb("#40456A"));
+  await page.getByRole("button", { name: "Undo palette" }).click();
+  await expect(card(48)).toHaveAttribute("aria-pressed", "true");
+  await expect(ceiling).toHaveCSS("fill", rgb("#F5F0E6"));
+});
+
 test("paint reassigns and swaps roles on the canvas, and prints its surface colours", async ({ page }) => {
   await page.goto("/paint/?mode=pair&room=kitchen&pair=feature&floor=57616B&wall=123456&feature=998877");
   const canvas = page.getByRole("region", { name: "Room surfaces" });
@@ -86,7 +137,7 @@ test("paint reassigns and swaps roles on the canvas, and prints its surface colo
   await expect(fill(page, "wall")).toHaveCSS("fill", before);
   await page.getByRole("button", { name: "Paint spec sheet" }).click();
   const dialog = page.getByRole("dialog", { name: "Paint spec sheet" });
-  for (const [surface, hex] of [["Main wall", "#111314"], ["Feature wall", "#A36AA5"], ["Ceiling", "#F5F0E6"], ["Trim", "#EBE4D7"]])
+  for (const [surface, hex] of [["Main wall", "#111314"], ["Feature wall", "#A36AA5"], ["Ceiling", "#A36AA5"], ["Trim", "#EBE4D7"]])
     await expect(dialog.getByRole("row", { name: surface + " " + hex })).toBeVisible();
   await expect(dialog.getByText("Existing floor #57616B")).toBeVisible();
   await expect(dialog.getByText(/Kitchen · Warm evening/)).toBeVisible();
@@ -234,13 +285,77 @@ test("the feature-wall ceiling survives palette actions, reload, saved restore a
   }
 });
 
+test("automatic ceilings survive links and saved restore and can be reset after locking or editing", async ({ page, browser }) => {
+  await page.goto("/paint/?mode=pair&room=living&pair=feature&wall=123456&feature=998877");
+  const ceiling = fill(page, "ceiling");
+  const lock = page.getByRole("button", { name: "Lock Ceiling" });
+  const reset = page.getByRole("button", { name: "Use palette ceiling" });
+  const openSaved = page.getByRole("button", { name: "Saved swatches" });
+  await (await find(page, "#121")).click();
+  await expect(ceiling).toHaveCSS("fill", rgb("#555832"));
+  await lock.click();
+  const card = await find(page, "#125");
+  await card.hover();
+  await expect(ceiling).toHaveCSS("fill", rgb("#555832"));
+  await card.click();
+  await expect(ceiling).toHaveCSS("fill", rgb("#555832"));
+  await expect(reset).toBeDisabled();
+  await lock.click();
+  await reset.click();
+  await expect(ceiling).toHaveCSS("fill", rgb("#40456A"));
+
+  const automatic = await share(page);
+  expect(new URL(automatic).searchParams.get("ceilingMode")).toBe("auto");
+  expect(new URL(automatic).searchParams.get("ceiling")).toBe("40456A");
+  await openSaved.click();
+  await page.getByRole("button", { name: "Save current design" }).click();
+  await close(page);
+  await page.reload();
+  await expect(ceiling).toHaveCSS("fill", rgb("#40456A"));
+  await (await find(page, "#121")).click();
+  await expect(ceiling).toHaveCSS("fill", rgb("#555832"));
+
+  await page.getByRole("button", { name: /^Edit ceiling #/ }).click();
+  const hex = page.getByLabel("Ceiling HEX or OKLCH");
+  await hex.fill("oklch(60% 0 0)");
+  await expect(ceiling).toHaveCSS("fill", rgb("#808080"));
+  await hex.press("Enter");
+  await expect(hex).toHaveValue("#808080");
+  await reset.click();
+  await expect(ceiling).toHaveCSS("fill", rgb("#555832"));
+  await page.getByRole("button", { name: "Undo palette" }).click();
+  await expect(ceiling).toHaveCSS("fill", rgb("#808080"));
+  await page.getByRole("tab", { name: "Explore" }).click();
+  await (await find(page, "#48")).press("Space");
+  await expect(ceiling).toHaveCSS("fill", rgb("#808080"));
+  await openSaved.click();
+  await page.getByRole("button", { name: "Restore design 1" }).click();
+  await expect(ceiling).toHaveCSS("fill", rgb("#40456A"));
+  await (await find(page, "#48")).press("Space");
+  await expect(ceiling).toHaveCSS("fill", rgb("#F5F0E6"));
+
+  const fresh = await browser.newPage();
+  try {
+    await fresh.goto(automatic);
+    await expect(fill(fresh, "ceiling")).toHaveCSS("fill", rgb("#40456A"));
+    await fresh.getByRole("button", { name: "Use palette ceiling" }).click();
+    await expect(fill(fresh, "ceiling")).toHaveCSS("fill", rgb("#F5F0E6"));
+    await fresh.getByRole("radio", { name: "Separate ceiling" }).check();
+    await (await find(fresh, "#125")).click();
+    await expect(fill(fresh, "wall")).toHaveCSS("fill", rgb("#D1B0A7"));
+    await expect(fill(fresh, "ceiling")).toHaveCSS("fill", rgb("#0093A5"));
+  } finally {
+    await fresh.close();
+  }
+});
+
 test("manual paint edits are reflected in the canvas swatch controls", async ({ page }) => {
   await page.goto("/paint/");
   await (await find(page, "#344")).click();
   await page.getByRole("tab", { name: "Tune" }).click();
-  await page.locator("#hex").fill("#123456");
+  await page.locator("#hex").fill("oklch(50% 0 0)");
   const wall = page.getByLabel("Main wall", { exact: true });
-  await expect(wall.locator("option:checked")).toHaveText("Custom · #123456");
+  await expect(wall.locator("option:checked")).toHaveText("Custom · #636363");
   await wall.selectOption("2");
   await expect(wall).toHaveValue("2");
   await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#A36AA5"));
@@ -248,14 +363,32 @@ test("manual paint edits are reflected in the canvas swatch controls", async ({ 
 
 test("failed library load leaves curated palettes usable and retry keeps keyboard focus", async ({ page }) => {
   let attempts = 0;
-  await page.route("**/wada-combinations.json", (route) => ++attempts === 1 ? route.abort() : route.continue());
+  const firstLoad = Promise.withResolvers<void>();
+  await page.route("**/wada-combinations.json", async (route) => {
+    if (++attempts > 1) return route.continue();
+    await firstLoad.promise;
+    return route.abort();
+  });
   await page.goto("/web/");
+  try {
+    await page.getByLabel("Search palettes").fill("#48");
+    await expect(page.locator("#wada-load")).toHaveText("Loading Wada combinations…");
+    await expect(page.locator("#wada-results-status")).toBeEmpty();
+    await expect(page.getByRole("button", { name: "Clear search" })).toBeHidden();
+  } finally {
+    firstLoad.resolve();
+  }
   await (await find(page, "12-0815 TCX")).press("Enter");
   await expect(page.locator("#status")).toHaveText("#F2E5CD · #D58592 · #783E33 applied.");
   await expect(page.locator("#wada-load")).toContainText("Curated palettes are still available");
+  await page.getByLabel("Search palettes").fill("#48");
+  await expect(page.locator("#wada-results-status")).toHaveText("No matching combinations");
+  await expect(page.getByRole("button", { name: "Clear search" })).toBeVisible();
   await page.getByRole("button", { name: "Retry" }).press("Enter");
   await expect(page.getByLabel("Search palettes")).toBeFocused();
   await expect(page.locator("#wada-load")).toBeEmpty();
+  await expect(combinations(page).locator(".wada-card")).toHaveText("#B73F74 · #005B8D");
+  await expect(page.getByRole("button", { name: "Clear search" })).toBeHidden();
   await page.getByLabel("Search palettes").fill("");
   await page.getByLabel("Search palettes").fill("Developer Docs");
   await expect(combinations(page).locator(".wada-card")).toHaveCount(1);
@@ -307,6 +440,34 @@ test("old and new links work in a fresh browser and shared state takes precedenc
   } finally {
     await fresh.close();
   }
+});
+
+test("a fresh Website studio opens the Light site palette and exports its exact preview colours", async ({ page }) => {
+  await page.goto("/web/");
+  await expect(page.getByRole("radio", { name: "Light" })).toBeChecked();
+  await expect(page.locator("#role-strip code")).toHaveText(["#F8F7F2", "#1C1F2A", "#F16AB7", "#000000"]);
+  await expect(page.locator("#metrics-text")).toContainText("15.31:1 AAA");
+  await expect(page.locator("#metrics-text")).toContainText("APCA Lc +99");
+  await expect(page.locator("#metrics-onAccent")).toContainText("7.49:1 AAA");
+  await expect(page.locator("#metrics-onAccent")).toContainText("APCA Lc +51");
+  await expect(page.locator("#specimen")).toHaveCSS("background-color", rgb("#F8F7F2"));
+  await expect(page.locator("#specimen")).toHaveCSS("color", rgb("#1C1F2A"));
+  await expect(page.locator("#specimen-button")).toHaveCSS("background-color", rgb("#F16AB7"));
+  await expect(page.locator("#specimen-button")).toHaveCSS("color", rgb("#000000"));
+  await page.getByRole("button", { name: "Check contrast" }).click();
+  await expect(page.getByRole("button", { name: "Site palette" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("row", { name: /Button fill/ })).toContainText("2.33:1");
+  await expect(page.getByRole("row", { name: /Button fill/ })).toContainText("Fail");
+  await page.getByRole("button", { name: "Export theme" }).click();
+  const output = page.locator("#theme-code");
+  for (const [token, value] of Object.entries({
+    background: "#F8F7F2", "primary-text": "#1C1F2A", accent: "#F16AB7", "text-on-accent": "#000000",
+  })) await expect(output).toHaveValue(new RegExp(`--${token}: ${value};`));
+  await close(page);
+  await page.getByRole("radio", { name: "Dark" }).check();
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
+  await expect(page.locator("#role-accent code")).toHaveText("#F16AB7");
 });
 
 test("website shows adjusted and added swatches, reports rendered contrast, and exports both themes", async ({ page }) => {
@@ -635,6 +796,120 @@ test("pilot pages have working presets, static guidance, clean canonicals and a 
 });
 
 for (const route of ["paint", "web"]) {
+  test(route + " recovers from empty searches without discarding the other criteria", async ({ page }) => {
+    await page.goto("/" + route + "/");
+    const search = page.getByRole("searchbox");
+    const status = page.locator("#wada-results-status");
+    const cards = page.locator(".wada-card");
+    const clearSearch = page.getByRole("button", { name: "Clear search" });
+    const clearFilters = page.getByRole("button", { name: "Clear filters" });
+    const filters = page.getByRole("button", { name: /^Filters/ });
+    const source = page.getByLabel("Source");
+    const count = page.getByLabel("Swatch count");
+    const style = page.getByLabel("Style");
+
+    await search.fill("no-such-palette");
+    await expect(status).toHaveText("No matching combinations");
+    await expect(clearFilters).toBeHidden();
+    await clearSearch.press("Enter");
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue("");
+    await expect(cards).toHaveCount(24);
+
+    await filters.click();
+    await source.selectOption("wada");
+    await count.selectOption("4");
+    await style.selectOption("bold");
+    await expect(status).toHaveText("No matching combinations");
+    await expect(clearSearch).toBeHidden();
+    await clearFilters.click();
+    await expect(search).toBeFocused();
+    await expect(filters).toHaveText("Filters");
+    await expect(source).toHaveValue("");
+    await expect(count).toHaveValue("0");
+    await expect(style).toHaveValue("");
+    await expect(cards).toHaveCount(24);
+
+    await source.selectOption("wada");
+    await count.selectOption("4");
+    await search.fill("#48");
+    await expect(clearFilters).toBeVisible();
+    await clearSearch.click();
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue("");
+    await expect(source).toHaveValue("wada");
+    await expect(count).toHaveValue("4");
+    await expect(cards.first().locator(".chip")).toHaveCount(4);
+    await search.fill("#48");
+    await expect(clearSearch).toBeVisible();
+    await clearFilters.press("Space");
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue("#48");
+    await expect(filters).toHaveText("Filters");
+    await expect(cards).toHaveText("#B73F74 · #005B8D");
+  });
+
+  test(route + " follows native Tune values through edits, role selection and Undo", async ({ page }) => {
+    await page.goto(route === "paint" ? "/paint/?mode=pair&room=living&pair=ceiling&wall=A9B39E&ceiling=F5F0E6" : "/web/");
+    await page.getByRole("tab", { name: "Tune" }).click();
+    const lightness = page.getByRole("slider", { name: "Lightness" });
+    const warmth = page.getByRole("slider", { name: "Warmth" });
+    const hex = page.locator("#hex");
+    const readouts = async () => {
+      const l = `${await lightness.inputValue()}%`;
+      const b = Number(await warmth.inputValue());
+      const signed = b > 0 ? `+${b}` : String(b);
+      await expect(page.locator("#lightness-value")).toHaveText(l);
+      await expect(lightness).toHaveAttribute("aria-valuetext", l);
+      await expect(page.locator("#warmth-value")).toHaveText(signed);
+      await expect(warmth).toHaveAttribute("aria-valuetext", signed);
+    };
+
+    await hex.fill("#AB");
+    await hex.press("Enter");
+    await expect(hex).toHaveAttribute("aria-invalid", "true");
+    await expect(page.locator("#feedback")).toContainText("Enter six HEX digits");
+    await hex.fill("#936F5B");
+    await expect(hex).not.toHaveAttribute("aria-invalid");
+    await readouts();
+    await expect(page.locator("#warmth-value")).toHaveText(/^\+\d+$/);
+    await hex.fill("oklch(60% 0 0)");
+    await hex.press("Enter");
+    await expect(hex).toHaveValue("#808080");
+    await expect(lightness).toHaveValue("60");
+    await expect(warmth).toHaveValue("0");
+    await readouts();
+
+    await lightness.press("ArrowRight");
+    await expect(lightness).toHaveValue("61");
+    await readouts();
+    const beforeWarmth = await hex.inputValue();
+    const { x, y, width, height } = (await warmth.boundingBox())!;
+    await page.mouse.move(x + width / 4, y + height / 2);
+    await page.mouse.down();
+    await expect.poll(async () => Number(await warmth.inputValue())).toBeLessThan(0);
+    await readouts();
+    await page.mouse.up();
+    await page.locator("#undo").click();
+    await expect(hex).toHaveValue(beforeWarmth);
+    await readouts();
+
+    await page.locator(route === "paint" ? "#role-ceiling" : "#role-text").click();
+    await expect(hex).not.toHaveValue(beforeWarmth);
+    await readouts();
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    const copy = page.getByRole("button", { name: "Copy", exact: true });
+    await page.locator("#picker").press("Tab");
+    await expect(hex).toBeFocused();
+    await expect(hex).toHaveCSS("outline-style", "solid");
+    await hex.press("Tab");
+    await expect(copy).toBeFocused();
+    await expect(copy).toHaveCSS("outline-style", "solid");
+    await copy.press("Enter");
+    await expect(page.getByText("HEX copied.")).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await hex.inputValue());
+  });
+
   test(route + " keeps filter choices and results when the disclosure closes", async ({ page }) => {
     await page.goto("/" + route + "/");
     const filters = page.getByRole("button", { name: /^Filters/ });
@@ -723,7 +998,7 @@ test("Paint locks the exact wall HEX in hover and apply, and workspace shortcuts
   const cards = page.locator(".wada-card");
   await cards.first().hover();
   await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#123456"));
-  await page.locator("h1").hover();
+  await page.getByRole("heading", { name: "Room preview" }).hover();
   const studio = page.locator("#studio");
   await studio.press("ArrowRight");
   await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
@@ -801,72 +1076,78 @@ test("Explore filters curated tags and source contrast independently of automati
   await expect(paper).toHaveCount(0);
 });
 
-test("Website Explore ranks source swatch counts before and after Wada loads and across pages", async ({ page }) => {
-  let finishLoading!: () => void;
-  const loading = new Promise<void>((resolve) => { finishLoading = resolve; });
-  await page.route("**/wada-combinations.json", async (route) => {
-    await loading;
-    await route.continue();
-  });
-  const cards = page.locator(".wada-card");
-  const results = () => cards.evaluateAll((nodes) => nodes.map((node) => ({
-    id: node.getAttribute("data-combination"), count: node.querySelectorAll(".chip").length,
-    label: node.querySelector(".wada-label b")?.textContent,
-  })));
-  const rank = [3, 4, 2];
-  const more = page.locator("#wada-more");
-  const { combinations: rows, swatches: pigments } = JSON.parse(await readFile("public/wada-combinations.json", "utf8")) as {
-    combinations: number[][]; swatches: [string, string][];
-  };
-  const featured = new Set([4, 125, 344]);
-  const entry = (id: string, hexes: string[]) => ({ id, count: hexes.length, label: hexes.join(" · ") });
-  const wada = rows.map(([id, ...swatches]) => entry(String(id), swatches.map((index) => pigments[index][1].toUpperCase())));
-  const named = namedCombinations.map(({ id, swatches }) => entry(id, swatches.map(({ hex }) => hex)));
-  const curated = [
-    ...catalogue.web.map(({ name, colours }) => entry(name, Object.values(colours))),
-    ...named.filter(({ id }) => id === "Developer Docs"),
-    ...wada.filter(({ id }) => featured.has(Number(id))),
-    ...named.filter(({ id }) => id !== "Developer Docs"),
-  ];
-  try {
-    await page.goto("/web/");
-    await expect(page.locator("#wada-load")).toHaveText("Loading Wada combinations…");
-    const firstPage = await results();
-    expect(firstPage).toHaveLength(24);
-    expect(firstPage).toEqual(rank.flatMap((count) => curated.filter((entry) => entry.count === count)).slice(0, 24));
-  } finally {
-    finishLoading();
-  }
-
-  // Keep the featured cards in their catalogue positions and exclude their downloaded duplicates.
-  const expected = rank.flatMap((count) => [
-    ...curated.filter((entry) => entry.count === count),
-    ...wada.filter((entry) => entry.count === count && !featured.has(Number(entry.id))),
-  ]);
-  await expect(page.locator("#wada-results-status")).toHaveText(new RegExp(`^\\d+ of ${expected.length} combinations$`));
-  for (let shown = 0; shown < expected.length;) {
-    const displayed = await results();
-    expect(displayed.length).toBeGreaterThan(shown);
-    expect(displayed).toEqual(expected.slice(0, displayed.length));
-    shown = displayed.length;
-    if (shown < expected.length) {
-      // The observer can append the final page and hide the button between reads.
-      await more.evaluate((button: HTMLButtonElement) => {
-        if (!button.hidden) button.click();
-      });
+for (const tool of ["paint", "web"] as const) {
+  test(tool + " Explore ranks source swatch counts before and after Wada loads and across pages", async ({ page }) => {
+    let finishLoading!: () => void;
+    const loading = new Promise<void>((resolve) => { finishLoading = resolve; });
+    await page.route("**/wada-combinations.json", async (route) => {
+      await loading;
+      await route.continue();
+    });
+    const cards = page.locator(".wada-card");
+    const results = () => cards.evaluateAll((nodes) => nodes.map((node) => ({
+      id: node.getAttribute("data-combination"), count: node.querySelectorAll(".chip").length,
+      label: node.querySelector(".wada-label b")?.textContent,
+    })));
+    const rank = tool === "paint" ? [2, 3, 4] : [3, 4, 2];
+    const recommended = tool === "paint" ? "Nordic Limewash" : "Developer Docs";
+    const more = page.locator("#wada-more");
+    const { combinations: rows, swatches: pigments } = JSON.parse(await readFile("public/wada-combinations.json", "utf8")) as {
+      combinations: number[][]; swatches: [string, string][];
+    };
+    const featured = new Set([4, 125, 344]);
+    const entry = (id: string, hexes: string[]) => ({ id, count: hexes.length, label: hexes.join(" · ") });
+    const wada = rows.map(([id, ...swatches]) => entry(String(id), swatches.map((index) => pigments[index][1].toUpperCase())));
+    const named = namedCombinations.map(({ id, swatches }) => entry(id, swatches.map(({ hex }) => hex)));
+    const curated = [
+      ...catalogue[tool].map(({ name, colours }) => {
+        const hexes = Object.values(colours);
+        return entry(name, hexes.length === 1 ? [...hexes, "#F5F0E6"] : hexes);
+      }),
+      ...named.filter(({ id }) => id === recommended),
+      ...wada.filter(({ id }) => featured.has(Number(id))),
+      ...named.filter(({ id }) => id !== recommended),
+    ];
+    try {
+      await page.goto("/" + tool + "/");
+      await expect(page.locator("#wada-load")).toHaveText("Loading Wada combinations…");
+      const firstPage = await results();
+      expect(firstPage).toHaveLength(24);
+      expect(firstPage).toEqual(rank.flatMap((count) => curated.filter((entry) => entry.count === count)).slice(0, 24));
+    } finally {
+      finishLoading();
     }
-  }
-  expect(await results()).toEqual(expected);
-  await expect(more).toBeHidden();
 
-  await page.getByLabel("Search palettes").fill("blue");
-  await page.getByRole("button", { name: /^Filters/ }).click();
-  await page.getByLabel("Source").selectOption("wada");
-  await page.getByLabel("Swatch count").selectOption("3");
-  await page.getByLabel("Style").selectOption("contrast");
-  const filtered = await results();
-  expect(filtered.length).toBeGreaterThan(1);
-  expect(filtered[0]).toEqual(entry("125", ["#D1B0A7", "#0093A5", "#40456A"]));
-  expect(filtered.every(({ id, count }) => Number(id) >= 121 && Number(id) <= 240 && count === 3)).toBe(true);
-  expect(filtered.every(({ id }) => rows[Number(id) - 1].slice(1).some((index) => /blue/i.test(pigments[index][0])))).toBe(true);
-});
+    // Keep the featured cards in their catalogue positions and exclude their downloaded duplicates.
+    const expected = rank.flatMap((count) => [
+      ...curated.filter((entry) => entry.count === count),
+      ...wada.filter((entry) => entry.count === count && !featured.has(Number(entry.id))),
+    ]);
+    await expect(page.locator("#wada-results-status")).toHaveText(new RegExp(`^\\d+ of ${expected.length} combinations$`));
+    for (let shown = 0; shown < expected.length;) {
+      const displayed = await results();
+      expect(displayed.length).toBeGreaterThan(shown);
+      expect(displayed).toEqual(expected.slice(0, displayed.length));
+      shown = displayed.length;
+      if (shown < expected.length) {
+        // The observer can append the final page and hide the button between reads.
+        await more.evaluate((button: HTMLButtonElement) => {
+          if (!button.hidden) button.click();
+        });
+      }
+    }
+    expect(await results()).toEqual(expected);
+    await expect(more).toBeHidden();
+
+    await page.getByLabel("Search palettes").fill("blue");
+    await page.getByRole("button", { name: /^Filters/ }).click();
+    await page.getByLabel("Source").selectOption("wada");
+    await page.getByLabel("Swatch count").selectOption("3");
+    if (tool === "web") await page.getByLabel("Style").selectOption("contrast");
+    const filtered = await results();
+    expect(filtered.length).toBeGreaterThan(1);
+    expect(filtered[0]).toEqual(entry("125", ["#D1B0A7", "#0093A5", "#40456A"]));
+    expect(filtered.every(({ id, count }) => Number(id) >= 121 && Number(id) <= 240 && count === 3)).toBe(true);
+    expect(filtered.every(({ id }) => rows[Number(id) - 1].slice(1).some((index) => /blue/i.test(pigments[index][0])))).toBe(true);
+  });
+}

@@ -1,7 +1,7 @@
 import { calcAPCA } from "apca-w3";
-import { oklch, parse, rgb } from "culori";
+import { oklch, rgb } from "culori";
 import { contrast, passes, toHex } from "./colour.ts";
-import { example, hex, type Design } from "./design.ts";
+import { example, type Design } from "./design.ts";
 
 export const tokenLabels = {
   background: "Background",
@@ -19,18 +19,6 @@ export type WebTokens = Record<Token, string>;
 export function invertLightness(hex: string) {
   const color = oklch(hex)!;
   return toHex({ ...color, l: 1 - color.l });
-}
-
-export function parseWebColour(input: string) {
-  const value = input.trim().toLowerCase();
-  const normalisedHex = hex(value);
-  if (normalisedHex) return normalisedHex;
-  if (!value.startsWith("oklch(") || /\/\s*none\s*\)$/.test(value)) return null;
-  const colour = parse(value);
-  if (colour?.mode !== "oklch" || (colour.alpha ?? 1) !== 1) return null;
-  const { l = 0, c = 0, h = 0 } = colour;
-  if (![l, c, h].every(Number.isFinite)) return null;
-  return toHex({ ...colour, l, c, h: h % 360 });
 }
 
 function mix(from: string, into: string, amount: number) {

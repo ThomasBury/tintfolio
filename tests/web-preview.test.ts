@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { oklch } from "culori";
 import { example } from "../src/design.ts";
-import { formatLc, parseWebColour, resolveWeb, textContrast } from "../src/web-preview.ts";
+import { parseColour } from "../src/colour.ts";
+import { formatLc, resolveWeb, textContrast } from "../src/web-preview.ts";
 
 test("Website surfaces move four OKLCH lightness points toward the middle", () => {
   const design = example("web", 1);
@@ -27,14 +28,14 @@ test("Website surfaces move four OKLCH lightness points toward the middle", () =
   assert.equal(resolveWeb(design).surface, "#636363");
 });
 
-test("Website Tune normalises opaque OKLCH to six-digit sRGB HEX", () => {
-  assert.equal(parseWebColour(" a9b39e "), "#A9B39E");
-  assert.equal(parseWebColour(" OKLCH(50% 0 none / 100%) "), "#636363");
-  assert.equal(parseWebColour("oklch(none none none)"), "#000000");
-  assert.equal(parseWebColour("oklch(62.795536% 0.55 29.233885deg)"), "#FF0000");
+test("Colour inputs normalise opaque OKLCH to six-digit sRGB HEX", () => {
+  assert.equal(parseColour(" a9b39e "), "#A9B39E");
+  assert.equal(parseColour(" OKLCH(50% 0 none / 100%) "), "#636363");
+  assert.equal(parseColour("oklch(none none none)"), "#000000");
+  assert.equal(parseColour("oklch(62.795536% 0.55 29.233885deg)"), "#FF0000");
   for (const invalid of ["#abc", "#112233ff", "red", "oklch(50% 0)",
     "oklch(0.5 0 0) trailing", "oklch(0.5 0 0 / 50%)", "oklch(0.5 0 0 / none)", "oklch(0.5 1e999 0)"]) {
-    assert.equal(parseWebColour(invalid), null, invalid);
+    assert.equal(parseColour(invalid), null, invalid);
   }
 });
 

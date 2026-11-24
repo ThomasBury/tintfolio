@@ -1,17 +1,17 @@
 import "./style.css";
 import {
-  ceilingColour, defaultFloor, editable, example, hex, labels, lightingPresets, rooms, save,
+  ceilingColour, defaultFloor, editable, example, hex, labels, lightingPresets, neutral, rooms, save,
   shareParams, startDesign, type Design, type Lighting, type Pair, type Role, type Room, type Theme, type Tool,
 } from "./design.ts";
 import { oklab, oklch } from "culori";
-import { correction, suggestions, toHex } from "./colour.ts";
+import { correction, parseColour, suggestions, toHex } from "./colour.ts";
 import { exportTheme, formats, sheet, type ExportFormat } from "./export.ts";
 import { icon } from "./icons.ts";
 import { room } from "./room.ts";
 import { assignmentSelect, chip, escapeText, mountCollection } from "./collection.ts";
 import { assignWeb, combinationName, type Assignment, type Combination } from "./wada.ts";
 import {
-  contrastResults, dashboard, formatLc, parseWebColour, resolveWeb, textContrast, tokenLabels, webTextPairs, type Token,
+  contrastResults, dashboard, formatLc, resolveWeb, textContrast, tokenLabels, webTextPairs, type Token,
 } from "./web-preview.ts";
 import { mountSaved } from "./saved.ts";
 import { mountPhoto } from "./photo.ts";
@@ -23,12 +23,12 @@ const mobileLayout = matchMedia("(max-width: 760px)");
 const initial = startDesign(tool, preset);
 let d = initial.design;
 let role = editable(d)[0];
-let undo: { role: Role; value: string } | null = null;
+let undo: { role: Role; value: string; ceilingMode: Design["ceilingMode"] } | null = null;
 let selected: { combination: Combination; wall: number; secondary: number; assignments: Assignment[] } | undefined;
 const locks = new Set<Role>();
 let auditioning = false;
 let doorEditorOpen = false;
-let toneStart: { input: HTMLInputElement; value: string } | undefined;
+let toneStart: { input: HTMLInputElement; value: string; ceilingMode: Design["ceilingMode"] } | undefined;
 let paletteUndo: { design: Design; role: Role; trigger?: HTMLElement; selected: typeof selected; keepCeiling: boolean; keepDoor: boolean } | null = null;
 const el = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -46,7 +46,8 @@ function applyDesign(design: Design, announcement: string, trigger?: HTMLElement
   const surfacesChanged = paint && (design.mode !== d.mode || !!selection !== !!selected);
   if (JSON.stringify(design) !== JSON.stringify(d)) {
     const keepCeiling = paint && design.mode === "pair" && design.pair === "feature" &&
-      d.mode === "pair" && d.pair === "feature" && design.colours.ceiling === d.colours.ceiling;
+      d.mode === "pair" && d.pair === "feature" && design.colours.ceiling === d.colours.ceiling &&
+      design.ceilingMode === d.ceilingMode;
     paletteUndo = { design: structuredClone(d), role, trigger, selected, keepCeiling, keepDoor: design.door === d.door };
   }
   d = design;
@@ -63,14 +64,23 @@ function applyDesign(design: Design, announcement: string, trigger?: HTMLElement
   el("status").textContent = announcement;
 }
 
+function paletteCeiling(combination?: Combination) {
+  return combination?.swatches[2]?.hex.toUpperCase() ?? neutral.ceiling;
+}
+
 function combinationDesign(combination: Combination) {
   const { swatches } = combination;
   const mode = paint ? "pair" : swatches.length > 2 || locks.has("accent") || locks.has("onAccent") ? "site" : "text";
   const colours = { ...d.colours };
+  let ceilingMode = d.ceilingMode;
   let assignments: Assignment[] = [];
   if (paint) {
     colours.wall = swatches[0].hex.toUpperCase();
     colours[d.pair] = swatches[1].hex.toUpperCase();
+    if (!locks.has("ceiling")) {
+      if (d.pair === "ceiling") ceilingMode = "auto";
+      else if (ceilingMode === "auto") colours.ceiling = paletteCeiling(combination);
+    }
   } else {
     assignments = combination.starter === undefined
       ? assignWeb(swatches)
@@ -90,7 +100,7 @@ function combinationDesign(combination: Combination) {
     }
   }
   for (const locked of locks) colours[locked] = d.colours[locked];
-  return { design: { ...d, mode, colours }, selection: { combination, wall: 0, secondary: 1, assignments } };
+  return { design: { ...d, mode, colours, ceilingMode }, selection: { combination, wall: 0, secondary: 1, assignments } };
 }
 
 function selectCombination(combination: Combination, trigger?: HTMLButtonElement) {
@@ -129,8 +139,9 @@ function swap(trigger?: HTMLButtonElement, accent = false) {
   if (!targets || !canSwap(accent)) return;
   const [first, second] = targets;
   const colours = { ...d.colours, [first]: d.colours[second], [second]: d.colours[first] };
+  const ceilingMode = second === "ceiling" ? "manual" : d.ceilingMode;
   const selection = paint && selected ? { ...selected, wall: selected.secondary, secondary: selected.wall } : undefined;
-  applyDesign({ ...d, colours }, "Roles swapped.", trigger, selection);
+  applyDesign({ ...d, colours, ceilingMode }, "Roles swapped.", trigger, selection);
 }
 
 function preview() {
@@ -162,7 +173,14 @@ function strip() {
       <button type="button" id="lock-${r}" data-lock="${r}" class="lock" aria-pressed="${locked}" aria-label="Lock ${labels[r]}" title="${locked ? "Unlock" : "Lock"} ${labels[r]}">${icon(locked ? "lock" : "unlock")}</button>
     </div>`;
   }
-  if (paint) return editable(d).map((r) => swatch(r)).join("");
+  if (paint) {
+    if (d.mode === "single") return swatch("wall");
+    return `<div class="swatch-pair">
+      ${swatch("wall")}
+      <button type="button" id="swap-colours" class="outline swap-pair" aria-label="Swap roles" title="Swap Main wall and ${labels[d.pair]} (S)" ${canSwap() ? "" : "disabled"}>⇄</button>
+      ${swatch(d.pair)}
+    </div>${d.pair === "feature" ? swatch("ceiling") : ""}`;
+  }
   const pairs = [
     ["background", "text", "swap-colours"],
     ["accent", "onAccent", "swap-accent"],
@@ -205,6 +223,18 @@ function tune(target: Role) {
 
 function warmth(value: string) {
   return Math.round(oklab(value)!.b * 100);
+}
+
+function toneControl(id: string, label: string, min: number, max: number, value: number) {
+  return `<label><span class="tone-label">${label}<span id="${id}-value" aria-hidden="true"></span></span>
+    <input id="${id}" type="range" min="${min}" max="${max}" value="${value}"></label>`;
+}
+
+function updateToneReadout(input: HTMLInputElement) {
+  const value = input.valueAsNumber;
+  const text = input.id === "lightness" ? `${value}%` : `${value > 0 ? "+" : ""}${value}`;
+  el(input.id + "-value").textContent = text;
+  input.setAttribute("aria-valuetext", text);
 }
 
 const apcaSizes = [
@@ -300,7 +330,7 @@ function paintSwatches() {
 
 function colourFields(value: string, label: string, prefix = "") {
   const transformed = !paint && d.theme === "dark" && (role === "background" || role === "text");
-  return `<label class="field-label" for="${prefix}hex">${transformed ? "Base " : ""}${label} <span>${paint ? "HEX" : "HEX or OKLCH"}</span></label>
+  return `<label class="field-label" for="${prefix}hex">${transformed ? "Base " : ""}${label} <span>HEX or OKLCH</span></label>
     <div class="field-row"><label class="picker"><input id="${prefix}picker" type="color" value="${value}" aria-label="Pick ${label} colour"></label>
     <input class="hex-field" id="${prefix}hex" spellcheck="false" autocomplete="off" autocapitalize="characters" aria-describedby="${prefix}feedback${transformed ? " base-colour-note" : ""}" value="${value}">
     ${prefix ? "" : `<button type="button" id="copy" class="outline">${icon("copy")}Copy</button>`}</div>
@@ -315,10 +345,9 @@ function paintTools() {
   const assignment = selected && d.mode === "pair"
     ? `${selected.combination.swatches.length > 2 ? '<p class="swatch-help">Choose which two palette colours to apply.</p>' : ""}
        <div class="swatch-fields" id="swatch-fields">${paintSwatches()}</div>` : "";
-  return `<div class="canvas-heading"><h3 id="room-surfaces-title">Room surfaces</h3><small>Approximate lighting</small></div>
-    <div class="canvas-fields">
-      ${layout}
+  return `${layout}
       <div class="floor-control"><label>Existing floor <span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button type="button" id="reset-floor" class="outline" ${d.floor ? "" : "disabled"}>Reset floor</button></div>
+      ${d.mode === "pair" && d.pair === "feature" ? `<div class="ceiling-control"><button type="button" id="reset-ceiling" class="outline" ${locks.has("ceiling") ? "disabled" : ""}>Use palette ceiling</button></div>` : ""}
       <div class="door-control">
         <div class="door-actions"><span><strong>Door</strong> <span id="door-value">${d.door ?? "Same as main wall"}</span></span>
           <button type="button" id="edit-door" class="outline" aria-controls="door-editor" aria-expanded="${doorEditorOpen}">Edit door colour</button>
@@ -326,8 +355,7 @@ function paintTools() {
         <div id="door-editor" ${doorEditorOpen ? "" : "hidden"}>${colourFields(d.door ?? d.colours.wall, "Door", "door-")}</div>
       </div>
       ${assignment}
-      <div id="canvas-notes"></div>
-    </div>`;
+      <div id="canvas-notes"></div>`;
 }
 
 function webNotes(changed: Assignment[]) {
@@ -369,30 +397,34 @@ function render(focus?: string) {
     <div class="preview-head"><div class="section-heading">${icon(paint ? "room" : "web")}<h2 id="preview-title">${paint ? "Room preview" : "Website preview"}</h2></div>
       <div class="preview-options">${previewControl}</div></div>
     <div id="picture">${preview()}</div>`;
-  if (paint) el("canvas-options").innerHTML = paintTools();
+  if (paint) el("room-surfaces-fields").innerHTML = paintTools();
   el("role-strip").innerHTML = strip();
   const value = d.colours[role];
   el("palette-fields").innerHTML = `${paint ? "" : modes()}<div class="editing">
       ${colourFields(value, editLabel(role))}
       <div class="tone-controls">
-        <label>Lightness<input id="lightness" type="range" min="0" max="100" value="${Math.round(oklab(value)!.l * 100)}"></label>
-        <label>Warmth<input id="warmth" type="range" min="-32" max="32" value="${warmth(value)}"></label>
+        ${toneControl("lightness", "Lightness", 0, 100, Math.round(oklab(value)!.l * 100))}
+        ${toneControl("warmth", "Warmth", -32, 32, warmth(value))}
       </div>
       ${paint ? '<div id="advice"></div>' : ""}
     </div>`;
+  updateToneReadout(el("lightness"));
+  updateToneReadout(el("warmth"));
   updateCanvasNotes();
   if (!paint) el("key").innerHTML = key();
   el("advice").innerHTML = advice();
   el<HTMLButtonElement>("undo-palette").disabled = !paletteUndo;
-  if (paint) el<HTMLButtonElement>("swap-colours").disabled = !canSwap();
   if (focus) el(focus)?.focus({ preventScroll: true });
 }
 
 function updateColour(value: string, source: string) {
   document.querySelector(".copy-result")?.remove();
-  if (value !== d.colours[role]) {
-    undo = { role, value: toneStart?.input.id === source ? toneStart.value : d.colours[role] };
+  const ceilingMode = role === "ceiling" ? "manual" : d.ceilingMode;
+  if (value !== d.colours[role] || ceilingMode !== d.ceilingMode) {
+    const start = toneStart?.input.id === source ? toneStart : undefined;
+    undo = { role, value: start?.value ?? d.colours[role], ceilingMode: start?.ceilingMode ?? d.ceilingMode };
     d.colours[role] = value;
+    d.ceilingMode = ceilingMode;
     persist();
   }
   el("picture").innerHTML = preview();
@@ -411,6 +443,8 @@ function updateColour(value: string, source: string) {
   if (source !== "hex") el<HTMLInputElement>("hex").value = value;
   if (source !== "lightness") el<HTMLInputElement>("lightness").value = String(Math.round(oklab(value)!.l * 100));
   if (source !== "warmth") el<HTMLInputElement>("warmth").value = String(warmth(value));
+  updateToneReadout(el("lightness"));
+  updateToneReadout(el("warmth"));
   colourFeedback(el("hex"));
 }
 
@@ -419,6 +453,10 @@ function updateFloor(value: string) {
   el("room").style.setProperty("--floor", value);
   el<HTMLButtonElement>("reset-floor").disabled = !d.floor;
   persist();
+}
+
+function setRoomSurfaces(open: boolean) {
+  el("room-surfaces-toggle").setAttribute("aria-expanded", String(open));
 }
 
 function setDoorEditor(open: boolean) {
@@ -455,16 +493,12 @@ function colourFeedback(input: HTMLElement, message = "") {
 }
 
 function validate(input: HTMLInputElement, reveal = false) {
-  const value = paint ? hex(input.value) : parseWebColour(input.value);
+  const value = parseColour(input.value);
   if (value) {
-    if (!paint) {
-      if (value !== d.colours[role]) updateColour(value, input.id);
-      input.value = value;
-    }
+    input.value = value;
     return;
   }
-  const feedback = colourFeedback(input, paint ? "Enter six HEX digits, for example #A9B39E."
-    : "Enter six HEX digits or an opaque OKLCH colour, for example oklch(60% 0.1 280).");
+  const feedback = colourFeedback(input, "Enter six HEX digits or an opaque OKLCH colour, for example oklch(60% 0.1 280).");
   if (reveal) feedback.scrollIntoView({ block: "center" });
 }
 
@@ -472,10 +506,8 @@ async function copy(value: string, button: HTMLElement, message: string) {
   document.querySelector(".copy-result")?.remove();
   const result = document.createElement("div");
   result.className = "copy-result";
-  const area = button.closest(".field-row, .actions, .export-actions")!;
-  if (!paint && button.id === "share") el("share-result").append(result);
-  else if (area.classList.contains("actions")) area.append(result);
-  else area.after(result);
+  if (button.id === "share") el("share-result").append(result);
+  else button.closest(".field-row, .export-actions")!.after(result);
   try {
     await navigator.clipboard.writeText(value);
     result.setAttribute("role", "status");
@@ -510,12 +542,12 @@ el("studio").tabIndex = 0;
 el("studio").innerHTML = `
   <div class="canvas-stack">
     <section id="preview-card" class="preview-card" aria-labelledby="preview-title"></section>
-    ${paint ? '<section id="canvas-options" aria-labelledby="room-surfaces-title"></section>' : ""}
-    ${paint ? `<div class="actions">
-      <button type="button" id="saved-open" class="outline" aria-haspopup="dialog">Saved swatches</button>
-      <button type="button" id="share" class="outline">${icon("share")}Share</button>
-      <button type="button" id="sheet-open" class="outline" aria-haspopup="dialog">Paint spec sheet</button><button type="button" id="photo-open" class="outline" aria-haspopup="dialog">Tint a photo</button>
-    </div>` : ""}
+    ${paint ? `<section id="canvas-options" aria-labelledby="room-surfaces-title">
+      <div class="canvas-heading"><h3 id="room-surfaces-title"><span>Room surfaces</span>
+        <button type="button" id="room-surfaces-toggle" aria-expanded="false" aria-controls="room-surfaces-fields">Room surfaces${icon("chevron")}</button>
+      </h3><small>Approximate lighting</small></div>
+      <div id="room-surfaces-fields" class="canvas-fields"></div>
+    </section>` : ""}
   </div>
   <div class="palette-slot">
   <section id="palette-editor" aria-labelledby="palette-title">
@@ -532,7 +564,6 @@ el("studio").innerHTML = `
           <button type="button" id="tab-explore" role="tab" aria-selected="true" aria-controls="library">Explore</button>
           <button type="button" id="tab-tune" role="tab" aria-selected="false" aria-controls="tune" tabindex="-1">Tune</button>
         </div>
-        ${paint ? '<button type="button" id="swap-colours" class="outline" title="Swap roles (S)">Swap roles</button>' : ""}
       </div>
       <div id="library" class="library palette-scroll" role="tabpanel" aria-labelledby="tab-explore"></div>
       <div id="tune" class="palette-scroll" role="tabpanel" aria-labelledby="tab-tune" hidden>
@@ -543,10 +574,9 @@ el("studio").innerHTML = `
     <div id="role-strip" role="group" aria-label="Active swatches"></div>
   </section></div>`;
 el("studio").insertAdjacentHTML("afterend", '<p class="sr" id="status" role="status"></p>');
-const collection = mountCollection(el("library"), tool, selectCombination, audition);
+const collection = mountCollection(el("library"), tool, mobileLayout, selectCombination, audition);
 const openSaved = mountSaved(tool, () => d, (design) => {
   applyDesign(design, "Saved design restored.", el("saved-open"));
-  el("saved-open").focus();
 });
 const openPhoto = paint ? mountPhoto(() => d) : undefined;
 document.body.insertAdjacentHTML("beforeend", paint
@@ -562,9 +592,36 @@ document.body.insertAdjacentHTML("beforeend", paint
     <label class="export-code">Output<textarea id="theme-code" spellcheck="false" readonly rows="9"></textarea></label>
     <div class="export-actions"><button type="button" id="copy-theme" class="outline">Copy</button>
     <button type="button" id="download-theme" class="solid">Download</button></div></dialog>`);
-if (!paint) {
-  el("theme-export").addEventListener("close", () => el("export-open").focus());
-  el("saved").addEventListener("close", () => el("saved-open").focus());
+const dialogOpeners = { saved: "saved-open", ...(paint
+  ? { "spec-sheet": "sheet-open", photo: "photo-open" }
+  : { "theme-export": "export-open" }) };
+const more = paint ? el<HTMLButtonElement>("paint-more") : null;
+for (const [dialog, opener] of Object.entries(dialogOpeners)) {
+  el(dialog).addEventListener("close", () => {
+    const action = el(opener);
+    (action.checkVisibility() ? action : more)?.focus();
+  });
+}
+
+if (more) {
+  const open = () => more.getAttribute("aria-expanded") === "true";
+  const setOpen = (expanded: boolean) => more.setAttribute("aria-expanded", String(expanded));
+  more.addEventListener("click", () => setOpen(!open()));
+  document.addEventListener("click", (event) => {
+    if (open() && !(event.target as Element).closest(".paint-actions")) setOpen(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !open()) return;
+    event.preventDefault();
+    setOpen(false);
+    more.focus();
+  });
+  el("paint-extra-actions").addEventListener("click", () => {
+    if (!open()) return;
+    setOpen(false);
+    more.focus();
+  });
+  mobileLayout.addEventListener("change", () => setOpen(false));
 }
 
 function updateExport() {
@@ -578,8 +635,10 @@ document.addEventListener("click", (event) => {
   if (id === "undo-palette" && paletteUndo) {
     const previous = paletteUndo;
     const surfacesChanged = paint && (previous.design.mode !== d.mode || !!previous.selected !== !!selected);
-    if (previous.keepCeiling && d.mode === "pair" && d.pair === "feature")
+    if (previous.keepCeiling && d.mode === "pair" && d.pair === "feature") {
       previous.design.colours.ceiling = d.colours.ceiling;
+      previous.design.ceilingMode = d.ceilingMode;
+    }
     if (previous.keepDoor) previous.design.door = d.door;
     d = previous.design;
     role = previous.role;
@@ -613,13 +672,17 @@ document.addEventListener("click", (event) => {
     const target = button.dataset.lock as Role;
     if (locks.has(target)) locks.delete(target);
     else locks.add(target);
+    audition();
     el("role-strip").innerHTML = strip();
-    if (paint) el<HTMLButtonElement>("swap-colours").disabled = !canSwap();
+    const reset = el<HTMLButtonElement>("reset-ceiling");
+    if (reset) reset.disabled = locks.has("ceiling");
     el(id).focus({ preventScroll: true });
   } else if (id === "tab-explore" || id === "tab-tune") {
     showTab(id === "tab-explore" ? "explore" : "tune");
   } else if (id === "sheet-toggle") {
-    setSheet(button.getAttribute("aria-expanded") !== "true");
+    const open = button.getAttribute("aria-expanded") !== "true";
+    setSheet(open);
+    if (!open) el("palette-editor").scrollIntoView({ block: "nearest" });
   } else if (id === "swap-colours" || id === "swap-accent") {
     swap(button, id === "swap-accent");
   } else if (button.dataset.suggest) {
@@ -638,15 +701,23 @@ document.addEventListener("click", (event) => {
   } else if (id === "undo" && undo) {
     role = undo.role;
     d.colours[role] = undo.value;
+    d.ceilingMode = undo.ceilingMode;
     undo = null;
     persist();
     render();
     el("role-" + role).focus();
     el("status").textContent = labels[role] + " restored.";
+  } else if (id === "reset-ceiling" && !locks.has("ceiling")) {
+    const ceiling = paletteCeiling(selected?.combination);
+    if (d.ceilingMode === "auto" && d.colours.ceiling === ceiling) return;
+    const colours = { ...d.colours, ceiling };
+    applyDesign({ ...d, colours, ceilingMode: "auto" }, "Automatic ceiling restored.", button, selected);
   } else if (id === "reset-floor") {
     el<HTMLInputElement>("floor").value = defaultFloor;
     updateFloor(defaultFloor);
     el("floor").focus();
+  } else if (id === "room-surfaces-toggle") {
+    setRoomSurfaces(button.getAttribute("aria-expanded") !== "true");
   } else if (id === "edit-door") {
     setDoorEditor(!doorEditorOpen);
   } else if (id === "match-door") {
@@ -654,16 +725,18 @@ document.addEventListener("click", (event) => {
     updateDoor(undefined);
   } else if (id === "copy") void copy(d.colours[role], button, "HEX copied.");
   else if (id === "share") {
-    if (!paint) audition();
+    audition();
     const url = new URL(location.pathname, location.origin);
     url.search = shareParams(tool, d).toString();
     void copy(url.href, button, "Design link copied.");
   } else if (id === "saved-open") {
-    if (!paint) audition();
+    audition();
     openSaved();
-  }
-  else if (id === "photo-open") openPhoto?.();
-  else if (id === "sheet-open") {
+  } else if (id === "photo-open") {
+    audition();
+    openPhoto?.();
+  } else if (id === "sheet-open") {
+    audition();
     el("sheet-content").innerHTML = sheet(d);
     el<HTMLDialogElement>("spec-sheet").showModal();
   } else if (id === "print-sheet") window.print();
@@ -689,7 +762,12 @@ document.addEventListener("change", (event) => {
     d.mode = input.value === "single" ? "single" : "pair";
     if (d.mode === "single") role = "wall";
     else {
-      d.pair = input.value as Pair;
+      const pair = input.value as Pair;
+      if (pair !== d.pair && d.ceilingMode === "auto" && !locks.has("ceiling")) {
+        if (pair === "feature") d.colours.ceiling = paletteCeiling(selected?.combination);
+        else if (selected) d.colours.ceiling = selected.combination.swatches[selected.secondary].hex.toUpperCase();
+      }
+      d.pair = pair;
       role = d.pair;
     }
     undo = null;
@@ -698,6 +776,7 @@ document.addEventListener("change", (event) => {
     const index = Number(input.value);
     selected = { ...selected, [target === "wall" ? "wall" : "secondary"]: index };
     d.colours[target] = selected.combination.swatches[index].hex.toUpperCase();
+    if (target === "ceiling") d.ceilingMode = "manual";
     undo = null;
   } else return;
   persist();
@@ -710,14 +789,14 @@ document.addEventListener("input", (event) => {
     const value = hex(input.value);
     if (value) updateFloor(value);
   } else if (input.matches(".hex-field, #picker, #door-picker")) {
-    const value = !paint && input.id === "hex" ? parseWebColour(input.value) : hex(input.value);
+    const value = parseColour(input.value);
     if (!value) {
       if (input.matches(".hex-field")) colourFeedback(input);
     }
     else if (input.id.startsWith("door-")) updateDoor(value, input.id);
     else updateColour(value, input.id);
   } else if (input.id === "lightness" || input.id === "warmth") {
-    if (toneStart?.input !== input) toneStart = { input, value: d.colours[role] };
+    if (toneStart?.input !== input) toneStart = { input, value: d.colours[role], ceilingMode: d.ceilingMode };
     const base = oklab(toneStart.value)!;
     if (input.id === "lightness") base.l = input.valueAsNumber / 100;
     else base.b = input.valueAsNumber / 100;
@@ -731,6 +810,7 @@ document.addEventListener("focusout", (event) => {
     const { input } = toneStart;
     const value = d.colours[role];
     input.value = String(input.id === "warmth" ? warmth(value) : Math.round(oklab(value)!.l * 100));
+    updateToneReadout(input);
     toneStart = undefined;
   }
 });
@@ -769,6 +849,7 @@ el("preview-card").addEventListener("click", (event) => {
   }
   if (target.closest("input, label, select, summary")) return;
   const surface = target.closest<SVGElement>("[data-surface]")?.dataset.surface;
+  if (mobileLayout.matches && (surface === "door" || surface === "floor")) setRoomSurfaces(true);
   if (surface === "door") {
     setDoorEditor(true);
     return;

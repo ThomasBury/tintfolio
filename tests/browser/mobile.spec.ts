@@ -11,6 +11,29 @@ async function onScreen(locator: Locator) {
 }
 
 for (const route of ["paint", "web"]) {
+  test(route + " shows the preview and a complete starter palette on a fresh phone visit", async ({ page }) => {
+    await page.goto("/" + route + "/");
+    await page.evaluate(() => document.fonts.ready);
+    const preview = page.locator("#picture");
+    const starter = page.locator(".wada-card").first();
+    await expect(starter).toHaveAttribute("data-combination", route === "paint" ? "Soft sage" : "Field notes");
+    await expect(preview).toBeInViewport({ ratio: 1 });
+    await expect(starter).toBeInViewport({ ratio: 1 });
+    await onScreen(starter);
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+
+    const before = await preview.innerHTML();
+    await starter.tap();
+    await expect(starter).toHaveAttribute("aria-pressed", "true");
+    expect(await preview.innerHTML()).not.toBe(before);
+    if (route === "paint") {
+      const surfaces = page.getByRole("button", { name: "Room surfaces" });
+      await expect(surfaces).toHaveAttribute("aria-expanded", "false");
+      await page.getByRole("button", { name: "Undo palette" }).press("Space");
+      await expect(surfaces).toHaveAttribute("aria-expanded", "false");
+    }
+  });
+
   test(route + " keeps the compact preview visible while applying and undoing with the keyboard", async ({ page }) => {
     await page.goto("/" + route + "/");
     const preview = page.locator("#picture");
@@ -66,20 +89,27 @@ for (const route of ["paint", "web"]) {
 test("floor editing stays independent and the print spec fits at 320 pixels", async ({ page }) => {
   await page.goto("/paint/");
   const surfaces = page.getByRole("region", { name: "Room surfaces" });
+  const toggle = surfaces.getByRole("button", { name: "Room surfaces" });
   const floor = surfaces.getByLabel("Existing floor");
   const reset = surfaces.getByRole("button", { name: "Reset floor" });
   await onScreen(surfaces);
-  await expect(reset).toBeDisabled();
   const oneColour = surfaces.getByRole("radio", { name: "One colour" });
-  await expect(oneColour).toBeChecked();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(oneColour).toBeHidden();
   await page.getByRole("radio", { name: "North daylight" }).press("Tab");
+  await expect(toggle).toBeFocused();
+  await toggle.press("Space");
+  await expect(oneColour).toBeChecked();
+  await expect(reset).toBeDisabled();
+  await toggle.press("Tab");
   await expect(oneColour).toBeFocused();
   await oneColour.press("Tab");
   await expect(floor).toBeFocused();
-  await page.getByRole("radio", { name: "North daylight" }).focus();
+  await toggle.press("Enter");
   const illustratedFloor = page.locator("[data-surface=floor]");
   const bounds = (await illustratedFloor.boundingBox())!;
   await illustratedFloor.tap({ position: { x: bounds.width / 2, y: bounds.height - 5 } });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(floor).toBeFocused();
   await floor.fill("#57616b");
   await expect(illustratedFloor).toHaveCSS("fill", "rgb(87, 97, 107)");
@@ -87,7 +117,12 @@ test("floor editing stays independent and the print spec fits at 320 pixels", as
   await expect(illustratedFloor).toHaveCSS("fill", "rgb(210, 177, 140)");
 
   await page.getByLabel("Search palettes").fill("#344");
-  await page.getByRole("button", { name: "#FDC57E · #1C4286 · #A36AA5 · #111314", exact: true }).tap();
+  const card = page.getByRole("button", { name: "#FDC57E · #1C4286 · #A36AA5 · #111314", exact: true });
+  await card.tap();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("button", { name: "Undo palette" }).press("Space");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await card.tap();
   const pair = surfaces.getByRole("radio", { name: "Feature wall" });
   await pair.tap();
   await expect(pair).toBeChecked();
@@ -100,6 +135,7 @@ test("floor editing stays independent and the print spec fits at 320 pixels", as
   await floor.scrollIntoViewIfNeeded();
   await onScreen(floor);
   await onScreen(pair);
+  await page.getByRole("button", { name: "More", exact: true }).tap();
   await page.getByRole("button", { name: "Paint spec sheet" }).tap();
   await onScreen(page.getByRole("button", { name: "Print or save as PDF" }));
   const dialog = page.getByRole("dialog");
@@ -120,6 +156,7 @@ test("paint layout, lighting and the ceiling editor work by keyboard and touch a
   await evening.tap();
   await expect(evening).toBeChecked();
 
+  await page.getByRole("button", { name: "Room surfaces" }).tap();
   const layout = page.getByRole("group", { name: "Paint layout" });
   await layout.getByRole("radio", { name: "One colour" }).press("ArrowLeft");
   const feature = layout.getByRole("radio", { name: "Feature wall" });
@@ -141,15 +178,20 @@ test("paint layout, lighting and the ceiling editor work by keyboard and touch a
 test("the door colour editor fits beside the sticky room preview on mobile", async ({ page }) => {
   await page.goto("/paint/");
   const surfaces = page.getByRole("region", { name: "Room surfaces" });
+  const toggle = surfaces.getByRole("button", { name: "Room surfaces" });
   const edit = surfaces.getByRole("button", { name: "Edit door colour" });
   const hex = surfaces.getByLabel("Door HEX");
-  await edit.tap();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await page.locator('[data-surface="door"]').tap();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(edit).toHaveAttribute("aria-expanded", "true");
   await expect(hex).toBeFocused();
   await onScreen(hex);
   await onScreen(page.locator("#room"));
-  await hex.fill("#4C6571");
-  await expect(page.locator('[data-surface="door"]')).toHaveCSS("fill", "rgb(76, 101, 113)");
+  await hex.fill("oklch(60% 0 0)");
+  await expect(page.locator('[data-surface="door"]')).toHaveCSS("fill", "rgb(128, 128, 128)");
+  await hex.blur();
+  await expect(hex).toHaveValue("#808080");
   await onScreen(hex);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   await surfaces.getByRole("button", { name: "Match main wall" }).tap();
@@ -157,6 +199,92 @@ test("the door colour editor fits beside the sticky room preview on mobile", asy
   await expect(edit).toBeFocused();
   await expect(hex).toBeHidden();
   await expect(surfaces.getByText("Same as main wall")).toBeVisible();
+});
+
+test("Paint app bar, pinned Explore controls and swatch swap fit both 320-pixel heights", async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: () => Promise.reject(new Error("Clipboard denied")) },
+  }));
+  for (const height of [640, 340]) {
+    await page.setViewportSize({ width: 320, height });
+    await page.goto("/paint/?mode=pair&room=living&pair=feature&wall=A9B39E&feature=66765E");
+    await page.evaluate(() => document.fonts.ready);
+    const bar = page.getByRole("banner");
+    const share = bar.getByRole("button", { name: "Share" });
+    const more = bar.getByRole("button", { name: "More", exact: true });
+    const preview = page.locator("#preview-card");
+    const previewPosition = await preview.boundingBox();
+    await more.press("Enter");
+    const sheet = bar.getByRole("button", { name: "Paint spec sheet" });
+    expect((await sheet.boundingBox())!.y).toBeGreaterThanOrEqual((await more.boundingBox())!.y + 44);
+    expect(await preview.boundingBox()).toEqual(previewPosition);
+    await more.press("Tab");
+    await expect(sheet).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(more).toBeFocused();
+    await expect(sheet).toBeHidden();
+    await more.tap();
+    await bar.tap({ position: { x: 315, y: 80 } });
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    for (const name of ["Saved swatches", "Paint spec sheet", "Tint a photo"]) {
+      const opener = bar.getByRole("button", { name });
+      if (name !== "Saved swatches") await more.tap();
+      await onScreen(opener);
+      await opener.tap();
+      await expect(page.getByRole("dialog", { name })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(name === "Saved swatches" ? opener : more).toBeFocused();
+      await expect(more).toHaveAttribute("aria-expanded", "false");
+    }
+    const barHeight = (await bar.boundingBox())!.height;
+    await share.press("Enter");
+    const manual = page.getByRole("textbox", { name: "Select and copy manually" });
+    await expect(manual).toBeFocused();
+    await expect(manual).toHaveValue(/ceilingMode=auto/);
+    expect((await bar.boundingBox())!.height).toBe(barHeight);
+    expect((await manual.boundingBox())!.y).toBeGreaterThanOrEqual(barHeight);
+
+    await page.locator("#room").evaluate((room) => room.scrollIntoView({ block: "center" }));
+    await onScreen(page.locator("#room"));
+    expect(await page.getByRole("region", { name: "Room surfaces" }).isVisible()).toBe(true);
+    const filters = page.getByRole("button", { name: /^Filters/ });
+    await filters.tap();
+    const count = page.getByLabel("Swatch count");
+    await count.selectOption("3");
+    await count.scrollIntoViewIfNeeded();
+    await onScreen(count);
+    const results = page.locator(".library-results");
+    const row = results.locator(".wada-card").first();
+    await expect.poll(async () => {
+      const area = (await results.boundingBox())!;
+      const item = (await row.boundingBox())!;
+      return item.y >= area.y && item.y + item.height <= area.y + area.height;
+    }).toBe(true);
+    await row.scrollIntoViewIfNeeded();
+    await onScreen(row);
+    const search = page.getByRole("searchbox");
+    const controls = [search, filters, page.getByRole("button", { name: "Randomize" }), count];
+    const positions = await Promise.all(controls.map((control) => control.boundingBox()));
+    await results.evaluate((node) => { node.scrollTop = 100; });
+    await expect(page.locator(".library-results-frame")).toHaveAttribute("data-fade-top", "");
+    expect(await Promise.all(controls.map((control) => control.boundingBox()))).toEqual(positions);
+    await search.fill("#125");
+    await row.tap();
+    await expect(row).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#role-strip code")).toHaveText(["#D1B0A7", "#0093A5", "#40456A"]);
+    const swap = page.getByRole("button", { name: "Swap roles" });
+    const wall = (await page.locator("#role-wall").boundingBox())!;
+    const feature = (await page.locator("#role-feature").boundingBox())!;
+    const button = (await swap.boundingBox())!;
+    expect(button.x).toBeGreaterThanOrEqual(wall.x + wall.width);
+    expect(button.x + button.width).toBeLessThanOrEqual(feature.x);
+    await swap.tap();
+    await expect(page.locator("#role-strip code")).toHaveText(["#0093A5", "#D1B0A7", "#40456A"]);
+    await page.getByRole("button", { name: "Undo palette" }).press("Space");
+    await expect(swap).toBeFocused();
+    await expect(page.getByRole("button", { name: "Room surfaces" })).toHaveAttribute("aria-expanded", "false");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  }
 });
 
 test("the Website activity chart and report action fit the 320-pixel preview", async ({ page }) => {

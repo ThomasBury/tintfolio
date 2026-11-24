@@ -350,9 +350,9 @@ function paintTools() {
       ${d.mode === "pair" && d.pair === "feature" ? `<div class="ceiling-control"><button type="button" id="reset-ceiling" class="outline" ${locks.has("ceiling") ? "disabled" : ""}>Use palette ceiling</button></div>` : ""}
       <div class="door-control">
         <div class="door-actions"><span><strong>Door</strong> <span id="door-value">${d.door ?? "Same as main wall"}</span></span>
-          <button type="button" id="edit-door" class="outline" aria-controls="door-editor" aria-expanded="${doorEditorOpen}">Edit door colour</button>
-          <button type="button" id="match-door" class="text-btn" ${d.door ? "" : "hidden"}>Match main wall</button></div>
+          <button type="button" id="edit-door" class="outline" aria-controls="door-editor" aria-expanded="${doorEditorOpen}">Edit door colour</button></div>
         <div id="door-editor" ${doorEditorOpen ? "" : "hidden"}>${colourFields(d.door ?? d.colours.wall, "Door", "door-")}</div>
+        <button type="button" id="match-door" class="text-btn" ${d.door ? "" : "hidden"}>Match main wall</button>
       </div>
       ${assignment}
       <div id="canvas-notes"></div>`;

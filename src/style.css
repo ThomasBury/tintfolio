@@ -1636,6 +1636,29 @@ button.swap-pair {
     padding-top: 3px;
   }
 }
+@media (max-width: 760px) and (min-height: 491px) {
+  [data-tool="web"] .palette-slot:has(#palette-editor:not(.collapsed) #library:not([hidden])) {
+    height: auto;
+    grid-template-rows: auto;
+  }
+  [data-tool="web"] #palette-editor:not(.collapsed):has(#library:not([hidden])) {
+    height: auto;
+    min-height: var(--palette-height);
+  }
+  [data-tool="web"] #palette-body:has(#library:not([hidden])),
+  [data-tool="web"] #library {
+    min-height: min-content;
+  }
+  .library-results-frame {
+    /* Keep the result count and a full row visible when swatch labels wrap. */
+    min-height: 6rem;
+  }
+  .library-results {
+    position: absolute;
+    inset: 0;
+    height: auto;
+  }
+}
 @media (max-width: 760px) and (max-height: 490px) {
   [data-tool="web"] #library {
     height: 265px;

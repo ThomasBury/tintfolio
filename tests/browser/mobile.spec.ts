@@ -264,6 +264,8 @@ test("Paint app bar, pinned Explore controls and swatch swap fit both 320-pixel 
     await onScreen(row);
     const search = page.getByRole("searchbox");
     const controls = [search, filters, page.getByRole("button", { name: "Randomize" }), count];
+    // A touch press temporarily translates the Filters button by one pixel.
+    await expect(filters).toHaveCSS("transform", "none");
     const positions = await Promise.all(controls.map((control) => control.boundingBox()));
     await results.evaluate((node) => { node.scrollTop = 100; });
     await expect(page.locator(".library-results-frame")).toHaveAttribute("data-fade-top", "");

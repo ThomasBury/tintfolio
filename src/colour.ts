@@ -2,13 +2,27 @@ import {
   clampChroma,
   formatHex,
   oklch,
+  parse,
   wcagContrast,
   type Oklch,
 } from "culori";
+import { hex } from "./design.ts";
 export const contrast = wcagContrast;
 export const passes = (ratio: number) => ratio >= 4.5;
 export const toHex = (c: Oklch) =>
   formatHex(clampChroma(c, "oklch", "rgb")).toUpperCase();
+
+export function parseColour(input: string) {
+  const value = input.trim().toLowerCase();
+  const normalisedHex = hex(value);
+  if (normalisedHex) return normalisedHex;
+  if (!value.startsWith("oklch(") || /\/\s*none\s*\)$/.test(value)) return null;
+  const colour = parse(value);
+  if (colour?.mode !== "oklch" || (colour.alpha ?? 1) !== 1) return null;
+  const { l = 0, c = 0, h = 0 } = colour;
+  if (![l, c, h].every(Number.isFinite)) return null;
+  return toHex({ ...colour, l, c, h: h % 360 });
+}
 export function suggestions(
   wall: string,
   target: "ceiling" | "feature",

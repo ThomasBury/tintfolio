@@ -45,14 +45,10 @@ function pilotHtml(editor, { tool, path, title, description, preset, guidance })
     .replace(/((?:name|property)="(?:og:)?description"\s+content=")[^"]+/g, `$1${escape(description)}`)
     .replace(/(rel="canonical" href=")[^"]+/, `$1${escape(canonical(path))}`)
     .replace(`data-tool="${tool}"`, `data-tool="${tool}" data-preset="${escape(preset)}"`);
-  if (tool === "web") return html
-    .replace('<h1 class="sr">Website colours</h1>',
+  return html
+    .replace(/<h1 class="sr">[^<]+<\/h1>/,
       `<div class="intro"><h1>${escape(title)}</h1><p>${escape(description)}</p></div>`)
     .replace(/<\/main>\s*<footer class="wrap" aria-label="Pairing guide">[\s\S]*?<\/footer>/, `${pairing}</main>`);
-  return html
-    .replace(/(<h1>)[^<]+/, `$1${escape(title)}`)
-    .replace(/(<div class="intro">[\s\S]*?<p>)[\s\S]*?(<\/p>)/, `$1${escape(description)}$2`)
-    .replace(/<p class="pairing route-links">.*?<\/p>/, pairing);
 }
 
 export default defineConfig({

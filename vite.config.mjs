@@ -39,15 +39,20 @@ if (originUrl.origin !== origin || !["https:", "http:"].includes(originUrl.proto
 const canonical = (path) => new URL(path, origin).href;
 
 function pilotHtml(editor, { tool, path, title, description, preset, guidance }) {
-  return editor
+  const pairing = `<section class="pairing" aria-labelledby="pairing-title"><h2 id="pairing-title">Pairing guidance</h2><p>${escape(guidance)}</p><a href="/${tool}/">Open the ${tool === "paint" ? "Wall paint" : "Website colours"} studio</a></section>`;
+  const html = editor
     .replace(/(<title>|property="og:title" content=")[^"<]+/g, `$1${escape(title)} · Tintfolio`)
     .replace(/((?:name|property)="(?:og:)?description"\s+content=")[^"]+/g, `$1${escape(description)}`)
     .replace(/(rel="canonical" href=")[^"]+/, `$1${escape(canonical(path))}`)
-    .replace(`data-tool="${tool}"`, `data-tool="${tool}" data-preset="${escape(preset)}"`)
+    .replace(`data-tool="${tool}"`, `data-tool="${tool}" data-preset="${escape(preset)}"`);
+  if (tool === "web") return html
+    .replace('<h1 class="sr">Website colours</h1>',
+      `<div class="intro"><h1>${escape(title)}</h1><p>${escape(description)}</p></div>`)
+    .replace(/<\/main>\s*<footer class="wrap" aria-label="Pairing guide">[\s\S]*?<\/footer>/, `${pairing}</main>`);
+  return html
     .replace(/(<h1>)[^<]+/, `$1${escape(title)}`)
     .replace(/(<div class="intro">[\s\S]*?<p>)[\s\S]*?(<\/p>)/, `$1${escape(description)}$2`)
-    .replace(/<p class="pairing route-links">.*?<\/p>/,
-      `<section class="pairing" aria-labelledby="pairing-title"><h2 id="pairing-title">Pairing guidance</h2><p>${escape(guidance)}</p><a href="/${tool}/">Open the ${tool === "paint" ? "Wall paint" : "Website colours"} studio</a></section>`);
+    .replace(/<p class="pairing route-links">.*?<\/p>/, pairing);
 }
 
 export default defineConfig({
@@ -102,8 +107,17 @@ export default defineConfig({
     {
       name: "bundled-licences",
       generateBundle() {
-        const packages = ["culori", "@fontsource/instrument-serif", "@fontsource-variable/dm-sans"];
-        const notices = packages.map(pkg => pkg + "\n\n" + readFileSync("node_modules/" + pkg + "/LICENSE", "utf8"));
+        const packages = {
+          culori: "LICENSE",
+          "apca-w3": "LICENSE.md",
+          colorparsley: "LICENSE.md",
+          "@fontsource/instrument-serif": "LICENSE",
+          "@fontsource-variable/dm-sans": "LICENSE",
+          "@fontsource-variable/geist": "LICENSE",
+          "@fontsource-variable/geist-mono": "LICENSE",
+        };
+        const notices = Object.entries(packages).map(([pkg, file]) =>
+          pkg + "\n\n" + readFileSync(`node_modules/${pkg}/${file}`, "utf8"));
         this.emitFile({ type: "asset", fileName: "licences.txt", source: notices.join("\n\n") });
       },
     },

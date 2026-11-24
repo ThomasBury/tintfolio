@@ -1,6 +1,7 @@
-import { oklch, rgb } from "culori";
-import { contrast, toHex } from "./colour.ts";
-import { example, type Design } from "./design.ts";
+import { calcAPCA } from "apca-w3";
+import { oklch, parse, rgb } from "culori";
+import { contrast, passes, toHex } from "./colour.ts";
+import { example, hex, type Design } from "./design.ts";
 
 export const tokenLabels = {
   background: "Background",
@@ -10,6 +11,7 @@ export const tokenLabels = {
   accent: "Accent",
   "text-on-accent": "Text on accent",
   border: "Input border",
+  divider: "Divider",
 } as const;
 export type Token = keyof typeof tokenLabels;
 export type WebTokens = Record<Token, string>;
@@ -17,6 +19,18 @@ export type WebTokens = Record<Token, string>;
 export function invertLightness(hex: string) {
   const color = oklch(hex)!;
   return toHex({ ...color, l: 1 - color.l });
+}
+
+export function parseWebColour(input: string) {
+  const value = input.trim().toLowerCase();
+  const normalisedHex = hex(value);
+  if (normalisedHex) return normalisedHex;
+  if (!value.startsWith("oklch(") || /\/\s*none\s*\)$/.test(value)) return null;
+  const colour = parse(value);
+  if (colour?.mode !== "oklch" || (colour.alpha ?? 1) !== 1) return null;
+  const { l = 0, c = 0, h = 0 } = colour;
+  if (![l, c, h].every(Number.isFinite)) return null;
+  return toHex({ ...colour, l, c, h: h % 360 });
 }
 
 function mix(from: string, into: string, amount: number) {
@@ -32,7 +46,11 @@ export function resolveWeb(d: Design): WebTokens {
   const active = d.theme === "dark" ? invertLightness : (value: string) => value;
   const background = active(d.colours.background);
   const text = active(d.colours.text);
-  const surface = mix(background, text, 0.07);
+  const base = oklch(background)!;
+  const shift = Math.max(-0.04, Math.min(0.04, 0.5 - base.l));
+  const surface = toHex({ ...base, l: base.l + shift });
+  const card = oklch(surface)!;
+  const toText = oklch(text)!.l - card.l;
   const actions = d.mode === "text" ? example("web").colours : d.colours;
   return {
     background,
@@ -41,8 +59,24 @@ export function resolveWeb(d: Design): WebTokens {
     "muted-text": mix(text, surface, 0.23),
     accent: actions.accent,
     "text-on-accent": actions.onAccent,
-    border: mix(text, surface, 0.35),
+    border: toHex({ ...card, l: card.l + 0.65 * toText }),
+    divider: mix(surface, text, 0.16),
   };
+}
+
+export const webTextPairs = [
+  ["primary-text", "background"],
+  ["text-on-accent", "accent"],
+] as const;
+
+export function textContrast(foreground: string, background: string) {
+  const ratio = contrast(foreground, background);
+  return { ratio, grade: ratio >= 7 ? "AAA" : passes(ratio) ? "AA" : "Below AA", lc: calcAPCA(foreground, background) };
+}
+
+export function formatLc(lc: number) {
+  const rounded = Math.sign(lc) * Math.round(Math.abs(lc));
+  return `Lc ${rounded > 0 ? "+" : ""}${rounded}`;
 }
 
 const pairs = [

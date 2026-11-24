@@ -17,7 +17,7 @@ Open the URL Vite prints. Run `just` to list commands or `just serve 5174` to ch
 
 ## Using the studios
 
-Both editors open on **Explore**. Search presets by name, pigment, code, HEX or Wada number, or filter by source, swatch count and style. **High Contrast** in Website colours finds palettes whose assigned source text and background already meet 4.5:1. Click or tap a preset to apply it. On a desktop, hover to audition it and move away to return to the active design. **Randomize** uses the current filters, and **Undo** restores the previous palette.
+Both editors open on **Explore**, where each preset is labelled with its HEX values in swatch order. Search by HEX, original palette or pigment name, Pantone code, or Wada number. Filter by source, swatch count and style. **High Contrast** in Website colours finds palettes whose assigned source text and background already meet 4.5:1. Click or tap a preset to apply it. On a desktop, hover to audition it and move away to return to the active design. **Randomize** uses the current filters, and **Undo** restores the previous palette.
 
 Select a canvas surface or an active swatch to open **Tune**. Edit the HEX, lightness or warmth, see Paint suggestions or Website contrast, and lock any swatches you want to carry into the next preset. With focus on the workspace itself, press Space to randomize, S to swap roles, or Left and Right to cycle through the filtered Wada presets. On a phone you can collapse the palette sheet while you assess the preview.
 

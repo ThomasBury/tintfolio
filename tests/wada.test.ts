@@ -28,6 +28,7 @@ test("collection preserves its ordered IDs, sizes and source swatches", () => {
   assert.deepEqual(matchingCombinations(collection, 2, " # 4 "), [collection[3]]);
   assert.deepEqual(matchingCombinations(collection, 3, " #4 "), []);
   assert.deepEqual(matchingCombinations(collection, 0, "#48"), [collection[47]]);
+  assert.deepEqual(matchingCombinations(collection, 0, " #b73f74 · #005b8d "), [collection[47]]);
   for (const query of ["#111314", "111314"])
     assert.ok(matchingCombinations(collection, 4, query).some(({ id }) => id === 344));
   const blues = matchingCombinations(collection, 4, "bLuE");

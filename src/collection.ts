@@ -1,6 +1,6 @@
 import { catalogue, labels, neutral, type Role, type Tool } from "./design.ts";
 import namedCombinations from "./named-combinations.json" with { type: "json" };
-import { hasSourceContrast, matchingCombinations, randomCombination, unpackCollection, type Combination, type Swatch } from "./wada.ts";
+import { combinationName, hasSourceContrast, matchingCombinations, randomCombination, unpackCollection, type Combination, type Swatch } from "./wada.ts";
 
 const pageSize = 24;
 const websiteSwatchOrder = [3, 4, 2];
@@ -12,7 +12,6 @@ export const escapeText = (text: string) =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 export const chip = (hex: string) =>
   `<i class="chip" style="--swatch:${hex}" aria-hidden="true"></i>`;
-export const combinationName = ({ id }: Combination) => typeof id === "number" ? `Combination #${id}` : id;
 
 function starters(tool: Tool): Combination[] {
   const tags = tool === "paint"
@@ -34,23 +33,19 @@ function starters(tool: Tool): Combination[] {
   });
 }
 
-function card({ id, swatches }: Combination, selected?: Combination["id"]) {
-  const wada = typeof id === "number";
-  const names = swatches.map(({ name }) => escapeText(name)).join(" · ");
+function card(combination: Combination, selected?: Combination["id"]) {
+  const { id, swatches } = combination;
   const codes = swatches.flatMap(({ code }) => code ? [escapeText(code)] : []).join(" · ");
   return `<button type="button" class="wada-card" data-combination="${escapeText(String(id))}" aria-pressed="${selected === id}">
     <span class="wada-band" aria-hidden="true">${swatches.map(({ hex }) => chip(hex)).join("")}</span>
-    <span class="wada-label"><b>${wada ? `Combination #${id}` : escapeText(id)}</b>
-    <small>${names}${codes ? " · " + codes : ""}</small></span>
+    <span class="wada-label"><b>${combinationName(combination)}</b>${codes ? `<small>${codes}</small>` : ""}</span>
   </button>`;
 }
 
 function swatchOptions(combination: Combination, value: number, other: number) {
-  return combination.swatches.map(({ name, hex }, index) => {
-    const code = hex.toUpperCase();
-    const caption = name === code ? code : `${escapeText(name)} · ${code}`;
-    return `<option value="${index}" ${index === value ? "selected" : ""} ${index === other ? "disabled" : ""}>${caption}</option>`;
-  }).join("");
+  return combination.swatches.map(({ hex }, index) =>
+    `<option value="${index}" ${index === value ? "selected" : ""} ${index === other ? "disabled" : ""}>${hex.toUpperCase()}</option>`,
+  ).join("");
 }
 
 export function mountCollection(
@@ -59,9 +54,10 @@ export function mountCollection(
   apply: (combination: Combination, trigger?: HTMLButtonElement) => void,
   audition: (combination?: Combination) => void,
 ) {
+  const website = tool === "web";
   library.innerHTML = `
     <div class="library-search">
-      <label><span>Search palettes</span><input id="wada-search" type="search" placeholder="Name or #48"></label>
+      <label><span>Search palettes</span><input id="wada-search" type="search" placeholder="HEX, name or #48"></label>
       <button type="button" class="outline" id="wada-filters-toggle" aria-expanded="false" aria-controls="wada-filters">Filters</button>
       <button type="button" class="outline" id="wada-random">Randomize</button>
     </div>
@@ -77,16 +73,18 @@ export function mountCollection(
         ${tool === "web" ? '<option value="contrast">High Contrast</option>' : ""}
       </select></label>
     </div>
+    ${website ? '<div class="library-results-frame"><div class="library-results"><div class="library-results-content">' : ""}
     <div class="library-loading"><p id="wada-load" role="status"></p><button type="button" class="outline" id="wada-retry" hidden>Retry</button></div>
     <p id="wada-results-status" role="status"></p>
     <div class="wada-grid" id="wada-results"></div>
     <button type="button" class="outline" id="wada-more">Load more</button>
-    <footer class="wada-credit">Numbered combinations come from Sanzo Wada’s
+    <footer class="wada-credit">Wada combinations come from Sanzo Wada’s
       <a href="https://en.seigensha.com/books/978-4-86152-247-5/"><cite>A Dictionary of Color Combinations</cite></a>,
       published by Seigensha.
       <a href="https://github.com/mattdesl/dictionary-of-colour-combinations/tree/c142bd0bc8049ea48db4da5eb397981f047e8ef4">Dataset and conversion notes</a> ·
       <a href="/wada-license.txt">MIT notice</a>
-    </footer>`;
+    </footer>
+    ${website ? "</div></div></div>" : ""}`;
 
   const el = <T extends HTMLElement = HTMLElement>(id: string) =>
     library.querySelector<T>("#wada-" + id)!;
@@ -100,6 +98,7 @@ export function mountCollection(
   const random = el<HTMLButtonElement>("random");
   const more = el<HTMLButtonElement>("more");
   const retry = el<HTMLButtonElement>("retry");
+  const resultsScroll = library.querySelector<HTMLElement>(".library-results");
   const recommended = tool === "paint" ? "Nordic Limewash" : "Developer Docs";
   const curated = [
     ...starters(tool), ...namedCombinations.filter(({ id }) => id === recommended),
@@ -215,6 +214,7 @@ export function mountCollection(
   search.addEventListener("input", reset);
   for (const input of [source, count, style]) input.addEventListener("change", reset);
   function reset() {
+    if (resultsScroll) resultsScroll.scrollTop = 0;
     visible = pageSize;
     filter();
     void load();
@@ -255,6 +255,19 @@ export function mountCollection(
     });
   }
   window.addEventListener("blur", () => audition());
+
+  if (resultsScroll) {
+    const frame = resultsScroll.parentElement!;
+    const updateFades = () => {
+      const { scrollTop, scrollHeight, clientHeight } = resultsScroll;
+      frame.toggleAttribute("data-fade-top", scrollTop > 1);
+      frame.toggleAttribute("data-fade-bottom", scrollHeight - clientHeight - scrollTop > 1);
+    };
+    const size = new ResizeObserver(updateFades);
+    size.observe(resultsScroll);
+    size.observe(resultsScroll.firstElementChild!);
+    resultsScroll.addEventListener("scroll", updateFades, { passive: true });
+  }
 
   filter();
   void load();

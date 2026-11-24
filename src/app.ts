@@ -8,9 +8,11 @@ import { correction, suggestions, toHex } from "./colour.ts";
 import { exportTheme, formats, sheet, type ExportFormat } from "./export.ts";
 import { icon } from "./icons.ts";
 import { room } from "./room.ts";
-import { assignmentSelect, chip, combinationName, escapeText, mountCollection } from "./collection.ts";
-import { assignWeb, type Assignment, type Combination } from "./wada.ts";
-import { contrastResults, dashboard, resolveWeb, tokenLabels, type Token } from "./web-preview.ts";
+import { assignmentSelect, chip, escapeText, mountCollection } from "./collection.ts";
+import { assignWeb, combinationName, type Assignment, type Combination } from "./wada.ts";
+import {
+  contrastResults, dashboard, formatLc, parseWebColour, resolveWeb, textContrast, tokenLabels, webTextPairs, type Token,
+} from "./web-preview.ts";
 import { mountSaved } from "./saved.ts";
 import { mountPhoto } from "./photo.ts";
 
@@ -54,7 +56,9 @@ function applyDesign(design: Design, announcement: string, trigger?: HTMLElement
   persist();
   render(active ? trigger?.id : undefined);
   collection.setSelected(selected?.combination.id);
-  if (surfacesChanged && mobileLayout.matches && trigger?.closest("#palette-editor"))
+  const keepWebPreviewVisible = !paint && mobileLayout.matches &&
+    getComputedStyle(el("preview-card")).position === "sticky";
+  if ((surfacesChanged && mobileLayout.matches || keepWebPreviewVisible) && trigger?.closest("#palette-editor"))
     el("palette-editor").scrollIntoView({ block: "nearest" });
   el("status").textContent = announcement;
 }
@@ -111,18 +115,18 @@ function audition(combination?: Combination) {
   }
 }
 
-function swapRoles(): [Role, Role] | undefined {
-  if (!paint) return ["background", "text"];
+function swapRoles(accent = false): [Role, Role] | undefined {
+  if (!paint) return accent ? ["accent", "onAccent"] : ["background", "text"];
   if (d.mode === "pair") return ["wall", d.pair];
 }
 
-function canSwap() {
-  return swapRoles()?.every((target) => !locks.has(target)) ?? false;
+function canSwap(accent = false) {
+  return swapRoles(accent)?.every((target) => !locks.has(target)) ?? false;
 }
 
-function swap(trigger?: HTMLButtonElement) {
-  const targets = swapRoles();
-  if (!targets || !canSwap()) return;
+function swap(trigger?: HTMLButtonElement, accent = false) {
+  const targets = swapRoles(accent);
+  if (!targets || !canSwap(accent)) return;
   const [first, second] = targets;
   const colours = { ...d.colours, [first]: d.colours[second], [second]: d.colours[first] };
   const selection = paint && selected ? { ...selected, wall: selected.secondary, secondary: selected.wall } : undefined;
@@ -141,18 +145,35 @@ function modes() {
 }
 
 function strip() {
-  return editable(d).map((r) => {
+  const tokens = paint ? undefined : resolveWeb(d);
+  function swatch(r: Role, token?: Token, against?: Token) {
     const current = el("tab-tune").getAttribute("aria-selected") === "true" && role === r;
     const locked = locks.has(r);
     const explicitCeiling = d.mode === "pair" && d.pair === "feature" && r === "ceiling";
     const name = explicitCeiling ? "Edit ceiling" : editLabel(r);
-    const value = d.colours[r];
+    const value = token && tokens ? tokens[token] : d.colours[r];
+    const metrics = against && tokens ? textContrast(value, tokens[against]) : undefined;
     return `<div class="active-swatch">
       <label class="swatch-chip" for="role-${r}">${chip(value)}</label>
-      <button type="button" id="role-${r}" data-role="${r}" class="tile" aria-pressed="${current}" aria-label="${explicitCeiling ? name : "Edit " + name} ${value}">
+      <button type="button" id="role-${r}" data-role="${r}" class="tile" aria-pressed="${current}" aria-label="${explicitCeiling ? name : "Edit " + name} ${value}" ${metrics ? `aria-describedby="metrics-${r}"` : ""}>
         <span>${name}</span><span class="swatch-value"><code>${value}</code>${explicitCeiling ? "" : icon("pen")}</span>
+        ${metrics ? `<span id="metrics-${r}" class="swatch-metrics"><span class="sr">WCAG 2.2 normal text </span><data value="${metrics.ratio}">${metrics.ratio.toFixed(2)}:1</data> ${metrics.grade}<br> <span>APCA ${formatLc(metrics.lc)}</span></span>` : ""}
       </button>
       <button type="button" id="lock-${r}" data-lock="${r}" class="lock" aria-pressed="${locked}" aria-label="Lock ${labels[r]}" title="${locked ? "Unlock" : "Lock"} ${labels[r]}">${icon(locked ? "lock" : "unlock")}</button>
+    </div>`;
+  }
+  if (paint) return editable(d).map((r) => swatch(r)).join("");
+  const pairs = [
+    ["background", "text", "swap-colours"],
+    ["accent", "onAccent", "swap-accent"],
+  ] as const;
+  return pairs.slice(0, d.mode === "site" ? 2 : 1).map(([bg, fg, id], index) => {
+    const [textToken, backgroundToken] = webTextPairs[index];
+    const label = `Swap ${labels[bg]} and ${labels[fg]}`;
+    return `<div class="swatch-pair">
+      ${swatch(bg, backgroundToken)}
+      <button type="button" id="${id}" class="outline swap-pair" aria-label="${label}" title="${label}${index ? "" : " (S)"}" ${canSwap(index === 1) ? "" : "disabled"}>⇄</button>
+      ${swatch(fg, textToken, backgroundToken)}
     </div>`;
   }).join("");
 }
@@ -186,6 +207,40 @@ function warmth(value: string) {
   return Math.round(oklab(value)!.b * 100);
 }
 
+const apcaSizes = [
+  [90, 14, "Preferred body text"],
+  [75, 16, "Minimum body text"],
+  [60, 24, "Fluent text"],
+  [45, 42, "Large text"],
+  [30, 0, "Non-content text only"],
+  [15, 0, "Certain non-text only"],
+] as const;
+
+function apcaDetails(tokens: ReturnType<typeof resolveWeb>) {
+  const samples = webTextPairs.slice(0, d.mode === "site" ? 2 : 1).map(([fg, bg]) => {
+    const { lc } = textContrast(tokens[fg], tokens[bg]);
+    const reference = apcaSizes.find(([level]) => Math.abs(lc) >= level);
+    const size = reference?.[1];
+    return `<div><p>${tokenLabels[fg]} on ${tokenLabels[bg]} · <code>${formatLc(lc)}</code></p>
+      ${size ? `<p class="apca-sample" style="--fg:${tokens[fg]};--bg:${tokens[bg]};--size:${size}px">The quick brown fox</p>` : ""}
+      <p>${size ? `<code>${size}px</code> · ` : ""}${reference?.[2] ?? "Below the lowest APCA reference level"}</p></div>`;
+  }).join("");
+  return `<section class="apca-details" aria-labelledby="apca-title">
+    <h3 id="apca-title">APCA contrast</h3>
+    <p>Positive Lc means darker text on a lighter background. Negative Lc means lighter text on a darker background. Use the size and weight guidance with the score.</p>
+    <table class="contrast-table">
+      <caption>Fluent text minimum reference sizes at normal weight (Arial 400)</caption>
+      <thead><tr><th scope="col">|Lc|</th><th scope="col">Size</th><th scope="col">Reference use</th></tr></thead>
+      <tbody>${apcaSizes.map(([lc, size, note]) => `<tr><th scope="row"><code>${lc}</code></th><td>${size ? `<code>${size}px</code>` : "—"}</td><td>${note}</td></tr>`).join("")}</tbody>
+    </table>
+    <div class="apca-samples">${samples}</div>
+    <p><a href="https://git.apcacontrast.com/documentation/WhyAPCA">Why APCA</a> ·
+      <a href="https://git.apcacontrast.com/documentation/minimum_compliance.html">Reference guidance</a> ·
+      <a href="https://github.com/Myndex/apca-w3#font-lookup-table">Font size and weight table</a> ·
+      <a href="https://github.com/Myndex/SAPC-APCA/discussions">APCA discussion forum</a></p>
+  </section>`;
+}
+
 function advice() {
   const undoControl = undo?.role === role
     ? `<button type="button" class="text-btn" id="undo">${icon("undo")}Undo</button>` : "";
@@ -210,7 +265,8 @@ function advice() {
       <thead><tr><th scope="col">Pair</th><th scope="col">Ratio</th><th scope="col">AA</th><th scope="col">AAA</th></tr></thead>
       <tbody>${contrastResults(tokens).map(({ label, ratio, aa, aaa }) => `<tr><th scope="row">${label}</th><td>${ratio.toFixed(2)}:1</td><td>${aa ? "Pass" : "Fail"}</td><td>${aaa === null ? "—" : aaa ? "Pass" : "Fail"}</td></tr>`).join("")}</tbody>
     </table>
-    <p class="sample">AA / AAA minimums are 4.5:1 / 7:1 for regular text and 3:1 / 4.5:1 for large headings. Graphical elements require 3:1 for AA.</p>`;
+    <p class="sample">AA / AAA minimums are 4.5:1 / 7:1 for regular text and 3:1 / 4.5:1 for large headings. Graphical elements require 3:1 for AA. Grades use the unrounded ratio. <a href="https://www.w3.org/TR/WCAG22/#contrast-minimum">WCAG 2.2 guidance</a></p>
+    ${apcaDetails(tokens)}`;
 }
 
 function key() {
@@ -243,10 +299,12 @@ function paintSwatches() {
 }
 
 function colourFields(value: string, label: string, prefix = "") {
-  return `<label class="field-label" for="${prefix}hex">${label} <span>HEX</span></label>
+  const transformed = !paint && d.theme === "dark" && (role === "background" || role === "text");
+  return `<label class="field-label" for="${prefix}hex">${transformed ? "Base " : ""}${label} <span>${paint ? "HEX" : "HEX or OKLCH"}</span></label>
     <div class="field-row"><label class="picker"><input id="${prefix}picker" type="color" value="${value}" aria-label="Pick ${label} colour"></label>
-    <input class="hex-field" id="${prefix}hex" spellcheck="false" autocomplete="off" autocapitalize="characters" aria-describedby="${prefix}feedback" value="${value}">
+    <input class="hex-field" id="${prefix}hex" spellcheck="false" autocomplete="off" autocapitalize="characters" aria-describedby="${prefix}feedback${transformed ? " base-colour-note" : ""}" value="${value}">
     ${prefix ? "" : `<button type="button" id="copy" class="outline">${icon("copy")}Copy</button>`}</div>
+    ${transformed ? '<p id="base-colour-note" class="sample">The dark preview inverts the base colour’s lightness.</p>' : ""}
     <p class="hex-feedback" id="${prefix}feedback" role="status"></p>`;
 }
 
@@ -276,7 +334,7 @@ function webNotes(changed: Assignment[]) {
   if (!changed.length) return "";
   const notes = changed.map(({ role, hex, source }) => {
     const description = source
-      ? `Adjusted from ${escapeText(source.name)} <code>${source.hex.toUpperCase()}</code>`
+      ? `Adjusted from <code>${source.hex.toUpperCase()}</code>`
       : "Added";
     return `<li>${labels[role]} <code>${hex}</code> · ${description}</li>`;
   }).join("");
@@ -301,7 +359,11 @@ function render(focus?: string) {
   const previewControl = paint
     ? `<label>Room<select id="room-choice" aria-label="Room">${selectOptions(rooms, d.room)}</select></label>
        ${radioGroup("lighting", "Lighting", { ...lightingPresets, north: "North daylight", evening: "Warm evening" }, d.lighting)}`
-    : `<label>Theme<select id="theme" aria-label="Theme">${selectOptions({ light: "Light", dark: "Dark" }, d.theme)}</select></label>
+    : `<fieldset id="theme" class="radio-group"><legend class="sr">Theme</legend><div class="segmented radio-options">
+        ${[["light", "☀", "Light"], ["dark", "☾", "Dark"]].map(([value, symbol, label]) =>
+          `<label><input type="radio" id="theme-${value}" name="theme" value="${value}" ${d.theme === value ? "checked" : ""}><span aria-hidden="true">${symbol}</span> ${label}</label>`,
+        ).join("")}
+       </div></fieldset>
        <button type="button" class="text-btn" id="show-contrast">Check contrast</button><small id="assignment-count"></small>`;
   el("preview-card").innerHTML = `
     <div class="preview-head"><div class="section-heading">${icon(paint ? "room" : "web")}<h2 id="preview-title">${paint ? "Room preview" : "Website preview"}</h2></div>
@@ -322,7 +384,7 @@ function render(focus?: string) {
   if (!paint) el("key").innerHTML = key();
   el("advice").innerHTML = advice();
   el<HTMLButtonElement>("undo-palette").disabled = !paletteUndo;
-  el<HTMLButtonElement>("swap-colours").disabled = !canSwap();
+  if (paint) el<HTMLButtonElement>("swap-colours").disabled = !canSwap();
   if (focus) el(focus)?.focus({ preventScroll: true });
 }
 
@@ -385,7 +447,7 @@ function updateDoor(value: string | undefined, source?: string) {
 }
 
 function colourFeedback(input: HTMLElement, message = "") {
-  const feedback = el(input.getAttribute("aria-describedby")!);
+  const feedback = el(input.id === "door-hex" ? "door-feedback" : "feedback");
   feedback.textContent = message;
   if (message) input.setAttribute("aria-invalid", "true");
   else input.removeAttribute("aria-invalid");
@@ -393,8 +455,16 @@ function colourFeedback(input: HTMLElement, message = "") {
 }
 
 function validate(input: HTMLInputElement, reveal = false) {
-  if (hex(input.value)) return;
-  const feedback = colourFeedback(input, "Enter six HEX digits, for example #A9B39E.");
+  const value = paint ? hex(input.value) : parseWebColour(input.value);
+  if (value) {
+    if (!paint) {
+      if (value !== d.colours[role]) updateColour(value, input.id);
+      input.value = value;
+    }
+    return;
+  }
+  const feedback = colourFeedback(input, paint ? "Enter six HEX digits, for example #A9B39E."
+    : "Enter six HEX digits or an opaque OKLCH colour, for example oklch(60% 0.1 280).");
   if (reveal) feedback.scrollIntoView({ block: "center" });
 }
 
@@ -403,7 +473,8 @@ async function copy(value: string, button: HTMLElement, message: string) {
   const result = document.createElement("div");
   result.className = "copy-result";
   const area = button.closest(".field-row, .actions, .export-actions")!;
-  if (area.classList.contains("actions")) area.append(result);
+  if (!paint && button.id === "share") el("share-result").append(result);
+  else if (area.classList.contains("actions")) area.append(result);
   else area.after(result);
   try {
     await navigator.clipboard.writeText(value);
@@ -440,11 +511,11 @@ el("studio").innerHTML = `
   <div class="canvas-stack">
     <section id="preview-card" class="preview-card" aria-labelledby="preview-title"></section>
     ${paint ? '<section id="canvas-options" aria-labelledby="room-surfaces-title"></section>' : ""}
-    <div class="actions">
+    ${paint ? `<div class="actions">
       <button type="button" id="saved-open" class="outline" aria-haspopup="dialog">Saved swatches</button>
       <button type="button" id="share" class="outline">${icon("share")}Share</button>
-      ${paint ? '<button type="button" id="sheet-open" class="outline" aria-haspopup="dialog">Paint spec sheet</button><button type="button" id="photo-open" class="outline" aria-haspopup="dialog">Tint a photo</button>' : '<button type="button" id="export-open" class="outline" aria-haspopup="dialog">Export theme</button>'}
-    </div>
+      <button type="button" id="sheet-open" class="outline" aria-haspopup="dialog">Paint spec sheet</button><button type="button" id="photo-open" class="outline" aria-haspopup="dialog">Tint a photo</button>
+    </div>` : ""}
   </div>
   <div class="palette-slot">
   <section id="palette-editor" aria-labelledby="palette-title">
@@ -461,7 +532,7 @@ el("studio").innerHTML = `
           <button type="button" id="tab-explore" role="tab" aria-selected="true" aria-controls="library">Explore</button>
           <button type="button" id="tab-tune" role="tab" aria-selected="false" aria-controls="tune" tabindex="-1">Tune</button>
         </div>
-        <button type="button" id="swap-colours" class="outline" title="Swap roles (S)">Swap roles</button>
+        ${paint ? '<button type="button" id="swap-colours" class="outline" title="Swap roles (S)">Swap roles</button>' : ""}
       </div>
       <div id="library" class="library palette-scroll" role="tabpanel" aria-labelledby="tab-explore"></div>
       <div id="tune" class="palette-scroll" role="tabpanel" aria-labelledby="tab-tune" hidden>
@@ -491,6 +562,10 @@ document.body.insertAdjacentHTML("beforeend", paint
     <label class="export-code">Output<textarea id="theme-code" spellcheck="false" readonly rows="9"></textarea></label>
     <div class="export-actions"><button type="button" id="copy-theme" class="outline">Copy</button>
     <button type="button" id="download-theme" class="solid">Download</button></div></dialog>`);
+if (!paint) {
+  el("theme-export").addEventListener("close", () => el("export-open").focus());
+  el("saved").addEventListener("close", () => el("saved-open").focus());
+}
 
 function updateExport() {
   el<HTMLTextAreaElement>("theme-code").value = exportTheme(resolveWeb(d), el<HTMLSelectElement>("format").value as ExportFormat);
@@ -514,13 +589,16 @@ document.addEventListener("click", (event) => {
     persist();
     render();
     collection.setSelected(selected?.combination.id);
-    const target = previous.trigger?.isConnected ? previous.trigger
-      : previous.trigger?.dataset.combination
-        ? document.querySelector<HTMLElement>(`[data-combination="${CSS.escape(previous.trigger.dataset.combination)}"]`) ?? el("wada-search")
-        : el("wada-search");
+    const trigger = previous.trigger;
+    const target = (trigger?.isConnected ? trigger
+      : trigger?.id ? document.getElementById(trigger.id)
+      : trigger?.dataset.combination
+        ? document.querySelector<HTMLElement>(`[data-combination="${CSS.escape(trigger.dataset.combination)}"]`)
+        : null) ?? el("wada-search");
     const fallback = el("palette-editor").classList.contains("collapsed") && el("sheet-toggle").checkVisibility()
       ? el("sheet-toggle") : el("palette-editor").querySelector<HTMLElement>('[aria-selected="true"]')!;
     if (surfacesChanged && mobileLayout.matches) el("palette-editor").scrollIntoView({ block: "nearest" });
+    if (target.closest(".swatch-pair")) target.scrollIntoView({ block: "nearest" });
     (target.checkVisibility() ? target : fallback).focus({ preventScroll: true });
     el("status").textContent = "Previous palette restored.";
   } else if (button.dataset.mode) {
@@ -536,14 +614,14 @@ document.addEventListener("click", (event) => {
     if (locks.has(target)) locks.delete(target);
     else locks.add(target);
     el("role-strip").innerHTML = strip();
-    el<HTMLButtonElement>("swap-colours").disabled = !canSwap();
+    if (paint) el<HTMLButtonElement>("swap-colours").disabled = !canSwap();
     el(id).focus({ preventScroll: true });
   } else if (id === "tab-explore" || id === "tab-tune") {
     showTab(id === "tab-explore" ? "explore" : "tune");
   } else if (id === "sheet-toggle") {
     setSheet(button.getAttribute("aria-expanded") !== "true");
-  } else if (id === "swap-colours") {
-    swap(button);
+  } else if (id === "swap-colours" || id === "swap-accent") {
+    swap(button, id === "swap-accent");
   } else if (button.dataset.suggest) {
     updateColour(button.dataset.suggest, id);
     el("undo")?.focus({ preventScroll: true });
@@ -576,16 +654,21 @@ document.addEventListener("click", (event) => {
     updateDoor(undefined);
   } else if (id === "copy") void copy(d.colours[role], button, "HEX copied.");
   else if (id === "share") {
+    if (!paint) audition();
     const url = new URL(location.pathname, location.origin);
     url.search = shareParams(tool, d).toString();
     void copy(url.href, button, "Design link copied.");
-  } else if (id === "saved-open") openSaved();
+  } else if (id === "saved-open") {
+    if (!paint) audition();
+    openSaved();
+  }
   else if (id === "photo-open") openPhoto?.();
   else if (id === "sheet-open") {
     el("sheet-content").innerHTML = sheet(d);
     el<HTMLDialogElement>("spec-sheet").showModal();
   } else if (id === "print-sheet") window.print();
   else if (id === "export-open") {
+    audition();
     el("export-mode").textContent = d.theme === "dark" ? "Dark preview colours" : "Light preview colours";
     updateExport();
     el<HTMLDialogElement>("theme-export").showModal();
@@ -601,7 +684,7 @@ document.addEventListener("change", (event) => {
   if (input.id === "format") { updateExport(); return; }
   if (input.id === "room-choice") d.room = input.value as Room;
   else if (input.name === "lighting") d.lighting = input.value as Lighting;
-  else if (input.id === "theme") d.theme = input.value as Theme;
+  else if (input.name === "theme") d.theme = input.value as Theme;
   else if (input.name === "paint-layout") {
     d.mode = input.value === "single" ? "single" : "pair";
     if (d.mode === "single") role = "wall";
@@ -627,7 +710,7 @@ document.addEventListener("input", (event) => {
     const value = hex(input.value);
     if (value) updateFloor(value);
   } else if (input.matches(".hex-field, #picker, #door-picker")) {
-    const value = hex(input.value);
+    const value = !paint && input.id === "hex" ? parseWebColour(input.value) : hex(input.value);
     if (!value) {
       if (input.matches(".hex-field")) colourFeedback(input);
     }
@@ -718,5 +801,7 @@ const layout = new ResizeObserver(() => {
   workspace.style.setProperty("--workspace-top", `${Math.ceil(workspace.getBoundingClientRect().top + window.scrollY)}px`);
   workspace.style.setProperty("--preview-height", `${Math.ceil(el("preview-card").getBoundingClientRect().height)}px`);
 });
-for (const element of [document.querySelector("header")!, document.querySelector(".intro")!, el("notice"), el("preview-card")])
-  layout.observe(element);
+for (const selector of ["header", ".intro", "#share-result", "#notice", "#preview-card"]) {
+  const element = document.querySelector(selector);
+  if (element) layout.observe(element);
+}

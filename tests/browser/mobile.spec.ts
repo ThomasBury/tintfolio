@@ -16,7 +16,7 @@ for (const route of ["paint", "web"]) {
     const preview = page.locator("#picture");
     const canvasBefore = await preview.innerHTML();
     await page.getByLabel("Search palettes").fill("#48");
-    const card = page.getByRole("button", { name: /Combination #48/ });
+    const card = page.getByRole("button", { name: "#B73F74 · #005B8D", exact: true });
     await card.scrollIntoViewIfNeeded();
     await card.focus();
     await card.press("Enter");
@@ -87,7 +87,7 @@ test("floor editing stays independent and the print spec fits at 320 pixels", as
   await expect(illustratedFloor).toHaveCSS("fill", "rgb(210, 177, 140)");
 
   await page.getByLabel("Search palettes").fill("#344");
-  await page.getByRole("button", { name: /Combination #344/ }).tap();
+  await page.getByRole("button", { name: "#FDC57E · #1C4286 · #A36AA5 · #111314", exact: true }).tap();
   const pair = surfaces.getByRole("radio", { name: "Feature wall" });
   await pair.tap();
   await expect(pair).toBeChecked();
@@ -179,4 +179,75 @@ test("the Website activity chart and report action fit the 320-pixel preview", a
   await report.scrollIntoViewIfNeeded();
   await onScreen(report);
   await onScreen(chart);
+});
+
+test("Website app bar, theme and paired swatches work by touch and keyboard at both 320-pixel heights", async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: () => Promise.reject(new Error("Clipboard denied")) },
+  }));
+  for (const height of [640, 340]) {
+    await page.setViewportSize({ width: 320, height });
+    await page.goto("/web/?mode=site&background=F3EADF&text=492E46&accent=35615E&onAccent=FFFFFF");
+    const bar = page.getByRole("banner");
+    const saved = bar.getByRole("button", { name: "Saved swatches" });
+    const share = bar.getByRole("button", { name: "Share" });
+    const exportTheme = bar.getByRole("button", { name: "Export theme" });
+    for (const action of [saved, share, exportTheme]) {
+      await onScreen(action);
+      const target = (await action.boundingBox())!;
+      expect(target.height).toBeGreaterThanOrEqual(44);
+      expect(target.width).toBeGreaterThanOrEqual(44);
+    }
+    const barHeight = (await bar.boundingBox())!.height;
+    await share.tap();
+    const manual = page.getByRole("textbox", { name: "Select and copy manually" });
+    await expect(manual).toBeFocused();
+    await expect(manual).toHaveValue(/mode=site&theme=light&background=F3EADF/);
+    expect((await bar.boundingBox())!.height).toBe(barHeight);
+    expect((await manual.boundingBox())!.y).toBeGreaterThanOrEqual(barHeight);
+
+    await saved.tap();
+    await page.keyboard.press("Escape");
+    await expect(saved).toBeFocused();
+    await exportTheme.press("Enter");
+    await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).tap();
+    await expect(exportTheme).toBeFocused();
+
+    const dark = page.getByRole("radio", { name: "Dark" });
+    const light = page.getByRole("radio", { name: "Light" });
+    await dark.tap();
+    await expect(dark).toBeChecked();
+    await dark.press("ArrowLeft");
+    await expect(light).toBeChecked();
+    await expect(light).toBeFocused();
+    const results = page.locator(".library-results");
+    const firstRow = results.locator(".wada-card").first();
+    await expect.poll(async () => {
+      const result = (await results.boundingBox())!;
+      const row = (await firstRow.boundingBox())!;
+      return row.y + row.height <= result.y + result.height;
+    }).toBe(true);
+    const pairs = page.locator(".swatch-pair");
+    const [pagePair, accentPair] = await pairs.all();
+    expect((await accentPair.boundingBox())!.y).toBeGreaterThanOrEqual(
+      (await pagePair.boundingBox())!.y + (await pagePair.boundingBox())!.height);
+    for (const pair of [pagePair, accentPair]) {
+      const tiles = await pair.locator(".tile").all();
+      const swap = pair.getByRole("button", { name: /^Swap/ });
+      const before = (await tiles[0].boundingBox())!;
+      const action = (await swap.boundingBox())!;
+      expect(action.x).toBeGreaterThanOrEqual(before.x + before.width);
+      expect(action.x + action.width).toBeLessThanOrEqual((await tiles[1].boundingBox())!.x);
+      expect(action.width).toBeGreaterThanOrEqual(44);
+      expect(action.height).toBeGreaterThanOrEqual(44);
+    }
+    const accentSwap = accentPair.getByRole("button", { name: /^Swap/ });
+    await accentSwap.tap();
+    await expect(page.locator("#role-accent code")).toHaveText("#FFFFFF");
+    await page.getByRole("button", { name: "Undo palette" }).press("Space");
+    await expect(page.locator("#role-accent code")).toHaveText("#35615E");
+    await expect(accentSwap).toBeFocused();
+    await onScreen(accentSwap);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  }
 });

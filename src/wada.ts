@@ -43,6 +43,10 @@ export function unpackCollection(data: CollectionData): Combination[] {
   });
 }
 
+export function combinationName({ swatches }: Combination) {
+  return swatches.map(({ hex }) => hex.toUpperCase()).join(" · ");
+}
+
 export function matchingCombinations(
   collection: Combination[],
   count: number,
@@ -52,15 +56,17 @@ export function matchingCombinations(
   const digits = term.replace(/^#\s*/, "");
   const byId = /^[0-9]+$/.test(digits);
   const numericHex = digits.length === 6 ? "#" + digits : "";
-  return collection.filter(
-    ({ id, swatches }) =>
-      (!count || swatches.length === count) &&
+  const byCombinationName = term.includes(" · ");
+  return collection.filter((combination) => {
+    const { id, swatches } = combination;
+    return (!count || swatches.length === count) &&
       (byId
         ? id === Number(digits) || swatches.some(({ hex }) => hex.toLowerCase() === numericHex)
-        : (typeof id === "string" && id.toLowerCase().includes(term)) ||
+        : (byCombinationName && combinationName(combination).toLowerCase() === term) ||
+          (typeof id === "string" && id.toLowerCase().includes(term)) ||
           swatches.some(({ name, code, hex }) =>
-            name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term))),
-  );
+            name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term)));
+  });
 }
 
 export function randomCombination(matches: Combination[], current?: Combination["id"]): Combination | undefined {

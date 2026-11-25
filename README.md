@@ -17,9 +17,11 @@ Open the URL Vite prints. Run `just` to list commands or `just serve 5174` to ch
 
 ## Using the studios
 
-Both editors open on **Explore**, where each preset is labelled with its HEX values in swatch order. Search by HEX, original palette or pigment name, Pantone code, or Wada number. Filter by source, swatch count and style. **High Contrast** in Website colours finds palettes whose assigned source text and background already meet 4.5:1. Click or tap a preset to apply it. On a desktop, hover to audition it and move away to return to the active design. **Randomize** uses the current filters, and **Undo** restores the previous palette.
+Both editors open on **Explore**, where each row shows the palette title or Wada combination number and its pigment names in swatch order. Hover over a row to see its HEX values. Search by HEX, palette or pigment name, Pantone code, or Wada number. Filter by source, swatch count and style. **High Contrast** in Website colours finds palettes whose assigned source text and background already meet 4.5:1. Click or tap a preset to apply it. On a desktop, hover to audition it and move away to return to the active design. **Randomize** uses the current filters, and **Undo** restores the previous palette.
 
 Select a canvas surface or an active swatch to open **Tune**. Edit the HEX, lightness or warmth, see Paint suggestions or Website contrast, and lock any swatches you want to carry into the next preset. With focus on the workspace itself, press Space to randomize, S to swap roles, or Left and Right to cycle through the filtered Wada presets. On a phone you can collapse the palette sheet while you assess the preview.
+
+In Wall paint, **Tune** lets you reassign an extra colour from a palette with three or four swatches. In Website colours, **Guide** in the preview header shows notes for the active palette. The swatch dock shows WCAG and APCA contrast for text and the accent against its background. **Auto-fix** picks the stronger APCA option from white and near-black for a low-contrast button label.
 
 Each editor remembers the last design in the browser tab. A valid share URL takes precedence and includes the active colours, lighting or theme. **Saved swatches** stores up to four designs per editor in the browser for comparison and restore.
 

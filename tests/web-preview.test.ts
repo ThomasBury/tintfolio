@@ -3,7 +3,7 @@ import test from "node:test";
 import { oklch } from "culori";
 import { example } from "../src/design.ts";
 import { parseColour } from "../src/colour.ts";
-import { formatLc, resolveWeb, textContrast } from "../src/web-preview.ts";
+import { contrastLevel, formatLc, resolveWeb, textContrast } from "../src/web-preview.ts";
 
 test("Website surfaces lift in each theme with a cap near white", () => {
   const design = example("web", 1);
@@ -57,4 +57,12 @@ test("text swatches grade the unrounded WCAG ratio and preserve APCA polarity", 
   assert.equal(formatLc(darker), "Lc +63");
   assert.equal(formatLc(lighter), "Lc -69");
   assert.equal(formatLc(textContrast("#FFFFFF", "#FFFFFF").lc), "Lc 0");
+});
+
+test("APCA guidance uses unrounded magnitude for both polarities", () => {
+  for (const [lc, label] of [[75, "Body OK"], [74.99, "Large / Bold"], [60, "Large / Bold"],
+    [59.99, "Buttons / UI"], [45, "Buttons / UI"], [44.99, "Low contrast"]] as const) {
+    assert.equal(contrastLevel(lc), label);
+    assert.equal(contrastLevel(-lc), label);
+  }
 });

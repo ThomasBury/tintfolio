@@ -48,12 +48,12 @@ function pilotHtml(editor, { tool, path, title, description, preset, guidance })
   return html
     .replace(/<h1 class="sr">[^<]+<\/h1>/,
       `<div class="intro"><h1>${escape(title)}</h1><p>${escape(description)}</p></div>`)
-    .replace(/<\/main>\s*<footer class="wrap" aria-label="Pairing guide">[\s\S]*?<\/footer>/, `${pairing}</main>`);
+    .replace(/<\/main>(?:\s*<footer class="wrap" aria-label="Pairing guide">[\s\S]*?<\/footer>)?/, `${pairing}</main>`);
 }
 
 export default defineConfig({
   appType: "mpa",
-  define: { __FEATURED_COMBINATIONS__: featured },
+  define: { __FEATURED_COMBINATIONS__: featured, __WADA_PIGMENTS__: swatches },
   plugins: [
     {
       name: "canonical-editor-pages",

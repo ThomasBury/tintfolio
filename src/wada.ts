@@ -1,4 +1,5 @@
 import { contrast, correction, neutralText, passes } from "./colour.ts";
+import { getColorDisplayName } from "./colour-name.ts";
 import type { Role } from "./design.ts";
 
 interface CollectionData {
@@ -43,8 +44,16 @@ export function unpackCollection(data: CollectionData): Combination[] {
   });
 }
 
-export function combinationName({ swatches }: Combination) {
+export function combinationName({ id }: Combination) {
+  return typeof id === "number" ? `Combination #${id}` : id;
+}
+
+export function combinationHexes({ swatches }: Combination) {
   return swatches.map(({ hex }) => hex.toUpperCase()).join(" · ");
+}
+
+export function combinationPigments({ swatches }: Combination) {
+  return swatches.map((swatch) => getColorDisplayName(swatch.hex, swatch)).join(" · ");
 }
 
 export function matchingCombinations(
@@ -62,10 +71,12 @@ export function matchingCombinations(
     return (!count || swatches.length === count) &&
       (byId
         ? id === Number(digits) || swatches.some(({ hex }) => hex.toLowerCase() === numericHex)
-        : (byCombinationName && combinationName(combination).toLowerCase() === term) ||
-          (typeof id === "string" && id.toLowerCase().includes(term)) ||
+        : (byCombinationName && (combinationHexes(combination).toLowerCase() === term ||
+            combinationPigments(combination).toLowerCase() === term)) ||
+          combinationName(combination).toLowerCase().includes(term) ||
           swatches.some(({ name, code, hex }) =>
-            name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term)));
+            name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term)) ||
+          swatches.some((swatch) => getColorDisplayName(swatch.hex, swatch).toLowerCase().includes(term)));
   });
 }
 

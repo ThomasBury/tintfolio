@@ -67,6 +67,22 @@ export function formatLc(lc: number) {
   return `Lc ${rounded > 0 ? "+" : ""}${rounded}`;
 }
 
+export function contrastLevel(lc: number) {
+  const strength = Math.abs(lc);
+  if (strength >= 75) return "Body OK";
+  if (strength >= 60) return "Large / Bold";
+  if (strength >= 45) return "Buttons / UI";
+  return "Low contrast";
+}
+
+export function accentTextFix(tokens: WebTokens) {
+  const { ratio, lc } = textContrast(tokens["text-on-accent"], tokens.accent);
+  if (passes(ratio) && Math.abs(lc) >= 45) return;
+  const white = Math.abs(calcAPCA("#FFFFFF", tokens.accent));
+  const dark = Math.abs(calcAPCA("#111111", tokens.accent));
+  return white >= dark ? "#FFFFFF" : "#111111";
+}
+
 const pairs = [
   ["Page text", "primary-text", "background", "text"],
   ["Page heading", "primary-text", "background", "large"],
@@ -132,8 +148,8 @@ export function dashboard() {
         <h4 id="sample-project" data-canvas-role="text">New project</h4>
         <form class="dashboard-form" aria-labelledby="sample-project" autocomplete="off">
           <label>Project name<input type="text" id="sample-project-name"></label>
-          <label>Email<input type="email" id="sample-email" placeholder="you@example.com"></label>
-          <button type="button" id="specimen-button" data-canvas-role="accent" aria-label="Tune accent"><span data-canvas-role="onAccent">Try</span></button>
+          <label>Workspace<input type="text" id="sample-workspace"></label>
+          <button type="button" id="specimen-button" data-canvas-role="accent"><span data-canvas-role="onAccent">Create project</span></button>
         </form>
       </section>
     </div>

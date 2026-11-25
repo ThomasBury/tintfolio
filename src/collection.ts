@@ -1,6 +1,7 @@
 import { catalogue, labels, neutral, type Role, type Tool } from "./design.ts";
+import { getColorDisplayName } from "./colour-name.ts";
 import namedCombinations from "./named-combinations.json" with { type: "json" };
-import { combinationName, hasSourceContrast, matchingCombinations, randomCombination, unpackCollection, type Combination, type Swatch } from "./wada.ts";
+import { combinationHexes, combinationName, combinationPigments, hasSourceContrast, matchingCombinations, randomCombination, unpackCollection, type Combination, type Swatch } from "./wada.ts";
 
 const pageSize = 24;
 const websiteSwatchOrder = [3, 4, 2];
@@ -27,25 +28,25 @@ function starters(tool: Tool): Combination[] {
         { mood: "Bold", use: ["Editorial"] },
       ];
   return catalogue[tool].map(({ name, reason, colours }, index) => {
-    const swatches: Swatch[] = Object.values(colours).map((hex) => ({ name: hex, hex }));
+    const swatches: Swatch[] = Object.values(colours).map((hex) => ({ name: getColorDisplayName(hex), hex }));
     if (tool === "paint" && swatches.length === 1)
-      swatches.push({ name: "Warm cream", hex: neutral.ceiling });
+      swatches.push({ name: getColorDisplayName(neutral.ceiling), hex: neutral.ceiling });
     return { id: name, starter: index, swatches, note: reason, tags: { ...tags[index], era: "Contemporary" } };
   });
 }
 
 function card(combination: Combination, tool: Tool, selected?: Combination["id"]) {
   const { id, swatches } = combination;
-  const codes = tool === "paint" ? swatches.flatMap(({ code }) => code ? [escapeText(code)] : []).join(" · ") : "";
-  return `<button type="button" class="wada-card" data-combination="${escapeText(String(id))}" aria-pressed="${selected === id}">
+  const codes = tool === "paint" ? swatches.flatMap(({ code }) => code ? [code] : []).join(" · ") : "";
+  return `<button type="button" class="wada-card" data-combination="${escapeText(String(id))}" aria-pressed="${selected === id}" title="${combinationHexes(combination)}">
     <span class="wada-band" aria-hidden="true">${swatches.map(({ hex }) => chip(hex)).join("")}</span>
-    <span class="wada-label"><b>${combinationName(combination)}</b>${codes ? `<small>${codes}</small>` : ""}</span>
+    <span class="wada-label"><b>${escapeText(combinationName(combination))}</b><small>${escapeText(combinationPigments(combination))}</small>${codes ? `<code class="wada-codes">${escapeText(codes)}</code>` : ""}</span>
   </button>`;
 }
 
 function swatchOptions(combination: Combination, value: number, other: number) {
-  return combination.swatches.map(({ hex }, index) =>
-    `<option value="${index}" ${index === value ? "selected" : ""} ${index === other ? "disabled" : ""}>${hex.toUpperCase()}</option>`,
+  return combination.swatches.map((swatch, index) =>
+    `<option value="${index}" title="${swatch.hex.toUpperCase()}" ${index === value ? "selected" : ""} ${index === other ? "disabled" : ""}>${escapeText(getColorDisplayName(swatch.hex, swatch))}</option>`,
   ).join("");
 }
 
@@ -312,6 +313,8 @@ export function mountCollection(
 }
 
 export function assignmentSelect(role: Role, combination: Combination, index: number, other: number, value: string) {
-  const custom = index < 0 ? `<option value="" selected disabled>Custom · ${value}</option>` : "";
-  return `<label>${labels[role]}<select id="swatch-${role}" data-swatch-role="${role}" aria-label="${labels[role]}">${custom}${swatchOptions(combination, index, other)}</select></label>`;
+  const custom = index < 0
+    ? `<option value="" title="${value}" selected disabled>Custom · ${escapeText(getColorDisplayName(value))}</option>` : "";
+  return `<label class="field-label" for="swatch-${role}">Palette colour for ${labels[role].toLowerCase()}</label>
+    <select id="swatch-${role}" data-swatch-role="${role}">${custom}${swatchOptions(combination, index, other)}</select>`;
 }

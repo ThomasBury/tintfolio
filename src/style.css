@@ -401,17 +401,12 @@ button:disabled, button[aria-disabled="true"] {
 .canvas-heading small {
   color: var(--muted);
 }
-#assignment-count {
-  font-size: 12px;
-  color: var(--muted);
-}
-.preview-options > label {
+#preview-settings > label {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-#canvas-notes:not(:empty) {
-  padding-bottom: 9px;
+#canvas-options #canvas-notes {
   color: var(--muted);
 }
 #canvas-options #canvas-notes:empty {
@@ -437,17 +432,21 @@ details > summary {
   gap: 8px;
   padding-bottom: 12px;
 }
-.swatch-fields, .saved-grid {
+.saved-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
-.swatch-fields select {
-  width: 100%;
+.surface-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 6px 16px;
 }
-.swatch-help {
-  margin: 0;
-  color: var(--muted);
+.surface-row + .surface-row {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
 }
 .canvas-fields .floor-control,
 .canvas-fields .floor-control label {
@@ -456,12 +455,15 @@ details > summary {
   gap: 7px;
 }
 .floor-control {
-  justify-content: space-between;
   font-size: 13px;
 }
 .floor-control .picker {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
+}
+.floor-control .picker input {
+  width: 100%;
+  height: 100%;
 }
 .ceiling-control {
   display: flex;
@@ -470,24 +472,17 @@ details > summary {
   font-size: 12px;
   font-weight: 620;
 }
-.door-control {
-  grid-column: 1 / -1;
-  border-top: 1px solid var(--line);
-  padding-top: 8px;
-}
 .door-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
 }
-.door-actions > span {
-  flex: 1 1 0;
-}
 #door-value {
   color: var(--muted);
 }
 #match-door {
+  justify-self: start;
   padding-inline: 0;
 }
 #door-editor {
@@ -496,15 +491,11 @@ details > summary {
 #door-editor .field-label {
   display: block;
 }
-@media (min-width: 950px) {
-  .canvas-fields {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
-    column-gap: 12px;
-  }
-  .canvas-fields > :not(.radio-group, .floor-control) {
-    grid-column: 1 / -1;
-  }
+#paint-assignment:not(:empty) {
+  margin-top: 8px;
+}
+#paint-assignment select {
+  width: 100%;
 }
 #palette-fields, #contrast-details {
   padding-inline: 13px;
@@ -568,14 +559,15 @@ details > summary {
 .active-swatch {
   flex: 1;
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 1fr auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 .tile {
   min-width: 44px;
   min-height: 44px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   justify-items: start;
   gap: 2px;
@@ -588,17 +580,29 @@ details > summary {
   text-align: left;
 }
 .tile .chip {
-  width: 100%;
-  height: 23px;
+  width: calc(100% - 38px);
+  height: 34px;
   border-radius: 4px;
 }
-.tile code {
+.tile code, .swatch-name {
   color: var(--muted);
 }
+.swatch-name {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+[data-tool="paint"] .swatch-role {
+  font-size: 12px;
+  white-space: nowrap;
+}
 .lock {
+  position: absolute;
+  inset: 0 0 auto auto;
   display: grid;
   place-items: center;
-  justify-self: end;
   width: 44px;
   height: 44px;
   padding: 0;
@@ -616,8 +620,7 @@ details > summary {
   color: white;
 }
 #role-strip > .active-swatch:only-child {
-  grid-template-columns: minmax(0, 1fr) 44px;
-  grid-template-rows: 1fr;
+  padding-inline-end: 44px;
 }
 #role-strip > .active-swatch:only-child .tile {
   grid-template-columns: minmax(0, 1fr) auto;
@@ -626,7 +629,11 @@ details > summary {
   column-gap: 9px;
 }
 #role-strip > .active-swatch:only-child .chip {
-  grid-row: span 2;
+  grid-row: span 3;
+  width: 100%;
+}
+#role-strip > .active-swatch:only-child .swatch-name {
+  width: auto;
 }
 .tone-controls {
   display: grid;
@@ -822,7 +829,8 @@ details > summary {
   line-height: 1;
 }
 .dashboard-badge {
-  border: 1px solid var(--divider);
+  border: 1px solid var(--border);
+  background: color-mix(in oklch, var(--accent) 12%, var(--surface));
   border-radius: 20px;
   padding: 3px 7px;
   font-size: 11px;
@@ -1039,10 +1047,10 @@ details > summary {
   border-color: var(--selected-edge);
   box-shadow: inset 0 0 0 1px var(--selected-edge);
 }
-.wada-label, .wada-label small {
+.wada-label, .wada-label small, .wada-codes {
   display: block;
 }
-.wada-card small {
+.wada-card :is(small, .wada-codes) {
   font-size: 12px;
   color: var(--muted);
 }
@@ -1323,9 +1331,6 @@ html:has(.sheet-dialog[open]) {
     overflow: hidden;
     clip-path: inset(50%);
   }
-  #assignment-count {
-    display: none;
-  }
   [data-tool="web"] .preview-options {
     width: 100%;
     justify-content: space-between;
@@ -1347,11 +1352,11 @@ html:has(.sheet-dialog[open]) {
     grid-template-columns: minmax(0, 1fr);
     gap: 5px;
   }
-  [data-tool="paint"] .preview-options > label {
+  [data-tool="paint"] #preview-settings > label {
     display: flex;
     gap: 6px;
   }
-  [data-tool="paint"] .preview-options > label select {
+  [data-tool="paint"] #preview-settings > label select {
     flex: 1;
   }
   #room {
@@ -1475,7 +1480,7 @@ body[data-tool] {
   font-family: Geist, sans-serif;
 }
 [data-tool] :is(code, .hex-field, .contrast-table td:nth-child(2), .swatch-metrics data,
-  .swatch-metrics span, .wada-label b, .wada-card small, .copy-result textarea, #theme-code) {
+  .swatch-metrics span:has(data), .swatch-apca, .copy-result textarea, #theme-code) {
   font-family: var(--mono);
 }
 [data-tool] :is(.brand, .dialog-head h2) {
@@ -1527,7 +1532,23 @@ body[data-tool] {
 [data-tool] #studio {
   margin-top: 14px;
   grid-template-columns: minmax(0, 1fr) clamp(385px, 34vw, 440px);
-  --palette-height: clamp(390px, calc(100dvh - var(--workspace-top, 66px) - 52px), 830px);
+  --palette-height: clamp(342px, calc(100dvh - var(--workspace-top, 66px) - var(--workspace-bottom, 12px)), 830px);
+}
+[data-tool="paint"] #studio {
+  --workspace-bottom: 52px;
+}
+@media (min-width: 761px) {
+  [data-tool="paint"] .canvas-stack:not(:has(#door-editor:not([hidden]))) {
+    max-height: var(--palette-height);
+    grid-template-rows: minmax(0, auto) auto;
+  }
+  [data-tool="paint"] .preview-card {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  [data-tool="paint"] #room {
+    max-height: min(54svh, 100%);
+  }
 }
 [data-tool="web"] .preview-card {
   display: flex;
@@ -1553,6 +1574,38 @@ body[data-tool] {
 [data-tool="web"] .preview-options {
   align-items: center;
   flex-wrap: wrap;
+}
+#preview-settings {
+  display: contents;
+}
+#palette-guide {
+  position: fixed;
+  inset: 8px 8px auto auto;
+  margin: 0;
+  width: min(300px, calc(100% - 16px));
+  max-height: min(260px, 75dvh);
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 4px 16px #18181b24;
+  font-size: 13px;
+}
+#palette-guide p {
+  margin-block: 4px;
+}
+#palette-guide a {
+  display: inline-block;
+  margin-top: 8px;
+}
+@supports (position-area: bottom span-left) {
+  #palette-guide {
+    inset: auto 0 auto auto;
+    position-area: bottom span-left;
+    position-try-fallbacks: flip-inline, flip-block;
+    margin-top: 4px;
+  }
 }
 #theme .radio-options {
   display: flex;
@@ -1649,14 +1702,35 @@ body[data-tool] {
   padding-inline: 3px;
 }
 .swatch-metrics {
+  display: grid;
+  gap: 1px;
   font-size: 10px;
   font-weight: 500;
   color: var(--muted);
+}
+.auto-fix {
+  position: relative;
+  isolation: isolate;
+  align-self: start;
+  min-height: 44px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 650;
+}
+.auto-fix::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 8px 0;
+  border: 1px solid var(--selected-edge);
+  border-radius: 20px;
+  background: var(--card);
 }
 button.swap-pair {
   align-self: start;
   padding: 0;
   font-size: 20px;
+  min-height: 44px;
   background: transparent;
   border-color: var(--line);
 }
@@ -1788,19 +1862,6 @@ button.swap-pair {
   }
   [data-tool="web"] #role-strip {
     flex-direction: column;
-  }
-  [data-tool="web"] #role-strip .active-swatch {
-    grid-template-columns: minmax(0, 1fr) 44px;
-    grid-template-rows: 1fr;
-  }
-  [data-tool="web"] #role-strip .tile .chip {
-    height: 13px;
-  }
-  [data-tool="web"] #role-strip .lock {
-    align-self: end;
-  }
-  button.swap-pair {
-    align-self: center;
   }
   .swatch-pair + .swatch-pair {
     border-top: 1px solid var(--line);

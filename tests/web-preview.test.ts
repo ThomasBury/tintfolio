@@ -5,11 +5,11 @@ import { example } from "../src/design.ts";
 import { parseColour } from "../src/colour.ts";
 import { formatLc, resolveWeb, textContrast } from "../src/web-preview.ts";
 
-test("Website surfaces move four OKLCH lightness points toward the middle", () => {
+test("Website surfaces lift in each theme with a cap near white", () => {
   const design = example("web", 1);
-  design.colours.background = "#F3EADF";
+  design.colours.background = "#E0D3C4";
   design.colours.text = "#492E46";
-  for (const [theme, shift] of [["light", -0.04], ["dark", 0.04]] as const) {
+  for (const [theme, shift] of [["light", 0.035], ["dark", 0.05]] as const) {
     design.theme = theme;
     const tokens = resolveWeb(design);
     const base = oklch(tokens.background)!;
@@ -24,8 +24,11 @@ test("Website surfaces move four OKLCH lightness points toward the middle", () =
     assert.equal(tokens["text-on-accent"], design.colours.onAccent);
   }
   design.theme = "light";
-  design.colours.background = "#666666";
-  assert.equal(resolveWeb(design).surface, "#636363");
+  design.colours.background = "#F3F3F3";
+  const nearWhite = resolveWeb(design);
+  assert.ok(Math.abs(oklch(nearWhite.surface)!.l - (1 + oklch(nearWhite.background)!.l) / 2) < 0.002);
+  design.colours.background = "#FFFFFF";
+  assert.equal(resolveWeb(design).surface, "#FFFFFF");
 });
 
 test("Colour inputs normalise opaque OKLCH to six-digit sRGB HEX", () => {

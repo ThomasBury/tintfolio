@@ -119,9 +119,7 @@ function audition(combination?: Combination) {
     picture.style.setProperty("--ceiling", ceilingColour(design));
     picture.style.setProperty("--feature", design.mode === "pair" && design.pair === "feature" ? design.colours.feature : design.colours.wall);
   } else {
-    const picture = el("specimen");
-    if (!picture) return;
-    for (const [name, value] of Object.entries(resolveWeb(design))) picture.style.setProperty("--" + name, value);
+    updateWebPreview(design);
   }
 }
 
@@ -144,8 +142,14 @@ function swap(trigger?: HTMLButtonElement, accent = false) {
   applyDesign({ ...d, colours, ceilingMode }, "Roles swapped.", trigger, selection);
 }
 
-function preview() {
-  return paint ? room(d) : dashboard(resolveWeb(d));
+function updateWebPreview(design: Design) {
+  const specimen = el("specimen");
+  for (const [name, value] of Object.entries(resolveWeb(design))) specimen.style.setProperty("--" + name, value);
+}
+
+function updatePreview() {
+  if (paint) el("picture").innerHTML = room(d);
+  else updateWebPreview(d);
 }
 
 function modes() {
@@ -160,14 +164,12 @@ function strip() {
   function swatch(r: Role, token?: Token, against?: Token) {
     const current = el("tab-tune").getAttribute("aria-selected") === "true" && role === r;
     const locked = locks.has(r);
-    const explicitCeiling = d.mode === "pair" && d.pair === "feature" && r === "ceiling";
-    const name = explicitCeiling ? "Edit ceiling" : editLabel(r);
+    const name = editLabel(r);
     const value = token && tokens ? tokens[token] : d.colours[r];
     const metrics = against && tokens ? textContrast(value, tokens[against]) : undefined;
     return `<div class="active-swatch">
-      <label class="swatch-chip" for="role-${r}">${chip(value)}</label>
-      <button type="button" id="role-${r}" data-role="${r}" class="tile" aria-pressed="${current}" aria-label="${explicitCeiling ? name : "Edit " + name} ${value}" ${metrics ? `aria-describedby="metrics-${r}"` : ""}>
-        <span>${name}</span><span class="swatch-value"><code>${value}</code>${explicitCeiling ? "" : icon("pen")}</span>
+      <button type="button" id="role-${r}" data-role="${r}" class="tile" aria-pressed="${current}" aria-label="Edit ${name} ${value}" ${metrics ? `aria-describedby="metrics-${r}"` : ""}>
+        ${chip(value)}<span>${name}</span><code>${value}</code>
         ${metrics ? `<span id="metrics-${r}" class="swatch-metrics"><span class="sr">WCAG 2.2 normal text </span><data value="${metrics.ratio}">${metrics.ratio.toFixed(2)}:1</data> ${metrics.grade}<br> <span>APCA ${formatLc(metrics.lc)}</span></span>` : ""}
       </button>
       <button type="button" id="lock-${r}" data-lock="${r}" class="lock" aria-pressed="${locked}" aria-label="Lock ${labels[r]}" title="${locked ? "Unlock" : "Lock"} ${labels[r]}">${icon(locked ? "lock" : "unlock")}</button>
@@ -239,9 +241,9 @@ function updateToneReadout(input: HTMLInputElement) {
 
 const apcaSizes = [
   [90, 14, "Preferred body text"],
-  [75, 16, "Minimum body text"],
+  [75, 18, "Body text"],
   [60, 24, "Fluent text"],
-  [45, 42, "Large text"],
+  [45, 36, "Large text"],
   [30, 0, "Non-content text only"],
   [15, 0, "Certain non-text only"],
 ] as const;
@@ -250,7 +252,8 @@ function apcaDetails(tokens: ReturnType<typeof resolveWeb>) {
   const samples = webTextPairs.slice(0, d.mode === "site" ? 2 : 1).map(([fg, bg]) => {
     const { lc } = textContrast(tokens[fg], tokens[bg]);
     const reference = apcaSizes.find(([level]) => Math.abs(lc) >= level);
-    const size = reference?.[1];
+    // APCA's integration guidance calls for a 42px sample at Lc 45.
+    const size = reference?.[0] === 45 ? 42 : reference?.[1];
     return `<div><p>${tokenLabels[fg]} on ${tokenLabels[bg]} · <code>${formatLc(lc)}</code></p>
       ${size ? `<p class="apca-sample" style="--fg:${tokens[fg]};--bg:${tokens[bg]};--size:${size}px">The quick brown fox</p>` : ""}
       <p>${size ? `<code>${size}px</code> · ` : ""}${reference?.[2] ?? "Below the lowest APCA reference level"}</p></div>`;
@@ -259,7 +262,7 @@ function apcaDetails(tokens: ReturnType<typeof resolveWeb>) {
     <h3 id="apca-title">APCA contrast</h3>
     <p>Positive Lc means darker text on a lighter background. Negative Lc means lighter text on a darker background. Use the size and weight guidance with the score.</p>
     <table class="contrast-table">
-      <caption>Fluent text minimum reference sizes at normal weight (Arial 400)</caption>
+      <caption>APCA reference sizes at normal weight (400)</caption>
       <thead><tr><th scope="col">|Lc|</th><th scope="col">Size</th><th scope="col">Reference use</th></tr></thead>
       <tbody>${apcaSizes.map(([lc, size, note]) => `<tr><th scope="row"><code>${lc}</code></th><td>${size ? `<code>${size}px</code>` : "—"}</td><td>${note}</td></tr>`).join("")}</tbody>
     </table>
@@ -346,11 +349,11 @@ function paintTools() {
     ? `${selected.combination.swatches.length > 2 ? '<p class="swatch-help">Choose which two palette colours to apply.</p>' : ""}
        <div class="swatch-fields" id="swatch-fields">${paintSwatches()}</div>` : "";
   return `${layout}
-      <div class="floor-control"><label>Existing floor <span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button type="button" id="reset-floor" class="outline" ${d.floor ? "" : "disabled"}>Reset floor</button></div>
-      ${d.mode === "pair" && d.pair === "feature" ? `<div class="ceiling-control"><button type="button" id="reset-ceiling" class="outline" ${locks.has("ceiling") ? "disabled" : ""}>Use palette ceiling</button></div>` : ""}
+      <div class="floor-control"><label>Existing floor <span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button type="button" id="reset-floor" class="outline surface-action" ${d.floor ? "" : "disabled"}>Reset floor</button></div>
+      ${d.mode === "pair" && d.pair === "feature" ? `<div class="ceiling-control"><span>Ceiling</span><button type="button" id="reset-ceiling" class="outline surface-action" ${locks.has("ceiling") ? "disabled" : ""}>Use palette ceiling</button></div>` : ""}
       <div class="door-control">
         <div class="door-actions"><span><strong>Door</strong> <span id="door-value">${d.door ?? "Same as main wall"}</span></span>
-          <button type="button" id="edit-door" class="outline" aria-controls="door-editor" aria-expanded="${doorEditorOpen}">Edit door colour</button></div>
+          <button type="button" id="edit-door" class="outline surface-action" aria-controls="door-editor" aria-expanded="${doorEditorOpen}">Edit door colour</button></div>
         <div id="door-editor" ${doorEditorOpen ? "" : "hidden"}>${colourFields(d.door ?? d.colours.wall, "Door", "door-")}</div>
         <button type="button" id="match-door" class="text-btn" ${d.door ? "" : "hidden"}>Match main wall</button>
       </div>
@@ -393,10 +396,8 @@ function render(focus?: string) {
         ).join("")}
        </div></fieldset>
        <button type="button" class="text-btn" id="show-contrast">Check contrast</button><small id="assignment-count"></small>`;
-  el("preview-card").innerHTML = `
-    <div class="preview-head"><div class="section-heading">${icon(paint ? "room" : "web")}<h2 id="preview-title">${paint ? "Room preview" : "Website preview"}</h2></div>
-      <div class="preview-options">${previewControl}</div></div>
-    <div id="picture">${preview()}</div>`;
+  el("preview-options").innerHTML = previewControl;
+  updatePreview();
   if (paint) el("room-surfaces-fields").innerHTML = paintTools();
   el("role-strip").innerHTML = strip();
   const value = d.colours[role];
@@ -427,7 +428,7 @@ function updateColour(value: string, source: string) {
     d.ceilingMode = ceilingMode;
     persist();
   }
-  el("picture").innerHTML = preview();
+  updatePreview();
   if (!paint) el("key").innerHTML = key();
   else if (role === "wall" && !d.door) {
     el<HTMLInputElement>("door-picker").value = value;
@@ -541,7 +542,12 @@ el("studio").setAttribute("aria-keyshortcuts", "Space S ArrowLeft ArrowRight");
 el("studio").tabIndex = 0;
 el("studio").innerHTML = `
   <div class="canvas-stack">
-    <section id="preview-card" class="preview-card" aria-labelledby="preview-title"></section>
+    <section id="preview-card" class="preview-card" aria-labelledby="preview-title">
+      <div class="preview-head"><div class="section-heading">${icon(paint ? "room" : "web")}<h2 id="preview-title">${paint ? "Room preview" : "Website preview"}</h2></div>
+        <div id="preview-options" class="preview-options"></div></div>
+      <div id="picture"${paint ? "" : ' tabindex="0" role="region" aria-label="Sample website preview"'}>${paint ? "" : dashboard()}</div>
+      ${paint ? "" : '<p class="preview-scroll-hint">Scroll for calendar and form</p>'}
+    </section>
     ${paint ? `<section id="canvas-options" aria-labelledby="room-surfaces-title">
       <div class="canvas-heading"><h3 id="room-surfaces-title"><span>Room surfaces</span>
         <button type="button" id="room-surfaces-toggle" aria-expanded="false" aria-controls="room-surfaces-fields">Room surfaces${icon("chevron")}</button>
@@ -829,7 +835,7 @@ el("studio").addEventListener("keydown", (event) => {
     el("tab-" + tab).focus();
     return;
   }
-  if (target.closest("input, select, textarea, button, summary, a, dialog, [contenteditable]")) return;
+  if (target.closest("input, select, textarea, button, summary, a, dialog, #picture, [contenteditable]")) return;
   const key = event.key.toLowerCase();
   if (![" ", "s", "arrowleft", "arrowright"].includes(key)) return;
   event.preventDefault();

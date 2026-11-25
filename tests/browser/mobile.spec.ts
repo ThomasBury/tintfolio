@@ -166,13 +166,34 @@ test("paint layout, lighting and the ceiling editor work by keyboard and touch a
   await expect(swatches.locator("code")).toHaveText(["#A9B39E", "#66765E", "#F5F0E6"]);
   await expect(swatches.getByText("Main wall", { exact: true })).toBeVisible();
   await expect(swatches.getByText("Feature wall", { exact: true })).toBeVisible();
-  const editCeiling = swatches.getByRole("button", { name: /^Edit ceiling #/ });
-  await editCeiling.tap();
+  const editCeiling = swatches.getByRole("button", { name: /^Edit Ceiling #/ });
+  await expect(editCeiling.locator("span")).toHaveText("Ceiling");
+  await editCeiling.locator(".chip").tap();
   await expect(editCeiling).toBeFocused();
   const hex = page.getByLabel("Ceiling HEX");
   await hex.fill("#26598D");
   await expect(swatches.locator("code")).toHaveText(["#A9B39E", "#66765E", "#26598D"]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  const surfaces = page.getByRole("region", { name: "Room surfaces" });
+  for (const height of [640, 340]) {
+    await page.setViewportSize({ width: 320, height });
+    const floor = surfaces.getByLabel("Existing floor");
+    await floor.fill("#57616B");
+    expect(await floor.boundingBox()).toMatchObject({ width: 44, height: 44 });
+    for (const name of ["Reset floor", "Use palette ceiling", "Edit door colour"]) {
+      const action = surfaces.getByRole("button", { name });
+      await action.scrollIntoViewIfNeeded();
+      await onScreen(action);
+      const box = (await action.boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(await action.evaluate((node) => getComputedStyle(node, "::before").height)).toBe("36px");
+      await action.tap();
+    }
+    await expect(floor).toHaveValue("#d2b18c");
+    await expect(swatches.getByRole("button", { name: "Edit Ceiling #F5F0E6" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  }
 });
 
 test("the door colour editor fits beside the sticky room preview on mobile", async ({ page }) => {
@@ -309,6 +330,46 @@ test("the Website activity chart and report action fit the 320-pixel preview", a
   await report.scrollIntoViewIfNeeded();
   await onScreen(report);
   await onScreen(chart);
+});
+
+test("all Website cards are reachable and scroll position survives theme and palette changes", async ({ page }) => {
+  for (const height of [640, 340]) {
+    await page.setViewportSize({ width: 320, height });
+    await page.goto("/web/");
+    await page.evaluate(() => document.fonts.ready);
+    const preview = page.getByRole("region", { name: "Sample website preview" });
+    await expect(page.getByText("Scroll for calendar and form")).toBeVisible();
+    const cards = preview.locator(".dashboard-card");
+    await expect(cards.getByRole("heading")).toHaveText(["Activity", "Plans", "Calendar", "New project"]);
+    const boxes = await Promise.all((await cards.all()).map((card) => card.boundingBox()));
+    expect(new Set(boxes.map((box) => box!.height)).size).toBe(1);
+    expect(new Set(boxes.map((box) => box!.width)).size).toBe(1);
+    expect(boxes[0]!.y).toBe(boxes[1]!.y);
+    expect(boxes[2]!.y).toBe(boxes[3]!.y);
+    expect(boxes[2]!.y).toBeGreaterThan(boxes[0]!.y);
+    for (const heading of (await cards.getByRole("heading").all()).slice(0, 2)) await onScreen(heading);
+    await expect(cards.getByRole("heading", { name: "Calendar" })).not.toBeInViewport();
+    await preview.press("End");
+    const scrolled = () => preview.evaluate((node) => node.scrollTop);
+    await expect.poll(scrolled).toBeGreaterThan(0);
+    const form = preview.getByRole("form", { name: "New project" });
+    await onScreen(cards.getByRole("heading", { name: "Calendar" }));
+    await onScreen(form.getByLabel("Project name"));
+    await form.getByLabel("Project name").fill("Studio refresh");
+    await form.getByLabel("Email").fill("studio@example.com");
+    const position = await scrolled();
+    await page.getByRole("radio", { name: "Dark" }).tap();
+    expect(await scrolled()).toBe(position);
+    await page.locator(".wada-card").first().tap();
+    expect(await scrolled()).toBe(position);
+    await expect(form.getByLabel("Project name")).toHaveValue("Studio refresh");
+    const tryButton = form.getByRole("button", { name: "Tune accent" });
+    expect((await tryButton.boundingBox())!.width).toBe((await form.boundingBox())!.width);
+    await tryButton.tap();
+    await expect(page.getByRole("tab", { name: "Tune" })).toHaveAttribute("aria-selected", "true");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+    expect(await preview.evaluate((node) => node.scrollWidth)).toBe(await preview.evaluate((node) => node.clientWidth));
+  }
 });
 
 test("Website app bar, theme and paired swatches work by touch and keyboard at both 320-pixel heights", async ({ page }) => {

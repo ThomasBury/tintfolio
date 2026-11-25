@@ -215,7 +215,7 @@ test("the feature-wall ceiling survives palette actions, reload, saved restore a
   await page.goto("/paint/?" + legacy);
   const ceiling = fill(page, "ceiling");
   const expectCeiling = (value: string) => expect(ceiling).toHaveCSS("fill", rgb(value));
-  const edit = page.getByRole("button", { name: /^Edit ceiling #/ });
+  const edit = page.getByRole("button", { name: /^Edit Ceiling #/ });
   const hex = page.getByLabel("Ceiling HEX");
   await expectCeiling("#F5F0E6");
   await page.evaluate((design) => localStorage.setItem("tintfolio-saved-paint", JSON.stringify([design])), legacy);
@@ -315,7 +315,7 @@ test("automatic ceilings survive links and saved restore and can be reset after 
   await (await find(page, "#121")).click();
   await expect(ceiling).toHaveCSS("fill", rgb("#555832"));
 
-  await page.getByRole("button", { name: /^Edit ceiling #/ }).click();
+  await page.getByRole("button", { name: /^Edit Ceiling #/ }).click();
   const hex = page.getByLabel("Ceiling HEX or OKLCH");
   await hex.fill("oklch(60% 0 0)");
   await expect(ceiling).toHaveCSS("fill", rgb("#808080"));
@@ -456,8 +456,12 @@ test("a fresh Website studio opens the Light site palette and exports its exact 
   await expect(page.locator("#specimen-button")).toHaveCSS("color", rgb("#000000"));
   await page.getByRole("button", { name: "Check contrast" }).click();
   await expect(page.getByRole("button", { name: "Site palette" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("row", { name: /Button fill/ })).toContainText("2.33:1");
+  await expect(page.getByRole("row", { name: /Button fill/ })).toContainText("2.71:1");
   await expect(page.getByRole("row", { name: /Button fill/ })).toContainText("Fail");
+  const apca = page.getByRole("region", { name: "APCA contrast" });
+  for (const [lc, size] of [[75, 18], [60, 24], [45, 36]]) {
+    await expect(apca.getByRole("row", { name: new RegExp(`^${lc} ${size}px `) })).toBeVisible();
+  }
   await page.getByRole("button", { name: "Export theme" }).click();
   const output = page.locator("#theme-code");
   for (const [token, value] of Object.entries({
@@ -485,15 +489,22 @@ test("website shows adjusted and added swatches, reports rendered contrast, and 
     await page.getByRole("radio", { name: theme === "light" ? "Light" : "Dark", exact: true }).check();
     const properties = await specimen.evaluate((node) =>
       Object.fromEntries(Array.from((node as HTMLElement).style).map((key) => [key, (node as HTMLElement).style.getPropertyValue(key)])));
-    const { heading, surface, input, button } = {
-      heading: specimen.locator("h3"), surface: specimen.locator(".dashboard-card").first(),
+    const { heading, cards, input, button } = {
+      heading: specimen.locator("h3"), cards: specimen.locator(".dashboard-card"),
       input: specimen.getByLabel("Email"), button: specimen.locator("#specimen-button"),
     };
     await expect(heading).toHaveCSS("color", rgb(properties["--primary-text"]));
-    await expect(surface).toHaveCSS("background-color", rgb(properties["--surface"]));
+    for (const card of await cards.all()) {
+      await expect(card).toHaveCSS("background-color", rgb(properties["--surface"]));
+      expect(await card.evaluate((node) => getComputedStyle(node).boxShadow)).toContain(rgb(properties["--divider"]));
+    }
+    const surface = cards.first();
     await expect(input).toHaveCSS("border-top-color", rgb(properties["--border"]));
+    await expect(specimen.getByLabel("Project name")).toHaveCSS("border-top-color", rgb(properties["--border"]));
     await expect(surface.locator(".dashboard-alert")).toHaveCSS("border-top-color", rgb(properties["--divider"]));
     await expect(button).toHaveCSS("background-color", rgb(properties["--accent"]));
+    await expect(specimen.locator("time")).toHaveCSS("background-color", rgb(properties["--accent"]));
+    await expect(specimen.locator("time")).toHaveCSS("color", rgb(properties["--text-on-accent"]));
     const bars = surface.locator(".dashboard-bar");
     for (const bar of (await bars.all()).slice(0, 3)) {
       await expect(bar).toHaveCSS("background-color", rgb(properties["--muted-text"]));
@@ -555,7 +566,7 @@ test("Website Tune uses live opaque OKLCH, normalizes on Enter or blur, and keep
   await expect(dark).toBeChecked();
   await expect(page.getByLabel("Base Background HEX or OKLCH")).toHaveValue("#808080");
   await expect(specimen).not.toHaveCSS("background-color", rgb("#808080"));
-  await expect(page.getByRole("table", { name: /Fluent text minimum reference sizes/ })).toBeVisible();
+  await expect(page.getByRole("table", { name: "APCA reference sizes at normal weight (400)" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Why APCA" })).toBeVisible();
 });
 
@@ -633,6 +644,53 @@ test("Website app bar and palette scroll fit both desktop sizes and themes", asy
       await expect(frame).not.toHaveAttribute("data-fade-bottom");
       await expect(page.locator("#role-strip")).toBeInViewport({ ratio: 1 });
     }
+  }
+});
+
+test("both default studios and their guide links fit on desktop arrival", async ({ page }) => {
+  for (const [width, height] of [[1440, 900], [1280, 720]]) {
+    await page.setViewportSize({ width, height });
+    for (const route of ["paint", "web"]) {
+      await page.goto(`/${route}/`);
+      await page.evaluate(() => document.fonts.ready);
+      const bar = page.getByRole("banner");
+      const nav = (await bar.getByRole("navigation").boundingBox())!;
+      const actions = (await bar.locator(".actions").boundingBox())!;
+      const wrap = (await bar.locator(".wrap").boundingBox())!;
+      const padding = await bar.locator(".wrap").evaluate((node) => parseFloat(getComputedStyle(node).paddingRight));
+      expect(actions.x + actions.width).toBeCloseTo(wrap.x + wrap.width - padding, 0);
+      expect(nav.x + nav.width).toBeLessThan(actions.x);
+      await expect(page.locator("#studio")).toBeInViewport({ ratio: 1 });
+      await expect(page.getByRole("contentinfo", { name: "Pairing guide" }).getByRole("link")).toBeInViewport({ ratio: 1 });
+      if (route === "web") {
+        for (const card of await page.locator(".dashboard-card").all()) {
+          await expect(card).toBeInViewport({ ratio: 1 });
+        }
+      }
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 450 });
+  for (const route of ["paint", "web"]) {
+    await page.goto(`/${route}/`);
+    if (route === "web") {
+      const preview = page.getByRole("region", { name: "Sample website preview" });
+      await preview.press("End");
+      await expect.poll(() => preview.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+      await expect(preview.getByRole("button", { name: "Tune accent" })).toBeInViewport();
+    }
+    const guide = page.getByRole("contentinfo", { name: "Pairing guide" }).getByRole("link");
+    await guide.scrollIntoViewIfNeeded();
+    await expect(guide).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
+  }
+});
+
+test("Pantone codes remain searchable in both studios and are displayed in Paint rows", async ({ page }) => {
+  for (const route of ["paint", "web"]) {
+    await page.goto(`/${route}/`);
+    const card = await find(page, "12-0815 TCX");
+    await expect(card.locator("b")).toHaveText("#F2E5CD · #D58592 · #783E33");
+    await expect(card.locator("small")).toHaveCount(route === "paint" ? 1 : 0);
   }
 });
 

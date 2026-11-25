@@ -35,7 +35,7 @@ export function resolveWeb(d: Design): WebTokens {
   const background = active(d.colours.background);
   const text = active(d.colours.text);
   const base = oklch(background)!;
-  const shift = Math.max(-0.04, Math.min(0.04, 0.5 - base.l));
+  const shift = Math.min(d.theme === "dark" ? 0.05 : 0.035, (1 - base.l) / 2);
   const surface = toHex({ ...base, l: base.l + shift });
   const card = oklch(surface)!;
   const toText = oklch(text)!.l - card.l;
@@ -90,30 +90,51 @@ export function contrastResults(tokens: WebTokens) {
   });
 }
 
-export function dashboard(tokens: WebTokens) {
-  const style = Object.entries(tokens).map(([key, value]) => `--${key}:${value}`).join(";");
+function calendar() {
+  const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const weeks = [[0, 1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20],
+    [21, 22, 23, 24, 25, 26, 27], [28, 29, 30, 0, 0, 0, 0]];
+  return `<table class="dashboard-calendar">
+    <caption>September 2026</caption>
+    <thead><tr>${weekdays.map((day) => `<th scope="col" aria-label="${day}">${day[0]}</th>`).join("")}</tr></thead>
+    <tbody>${weeks.map((week) => `<tr>${week.map((day) => `<td>${day === 16
+      ? '<time datetime="2026-09-16" data-canvas-role="onAccent">16</time>' : day || ""}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table>`;
+}
+
+export function dashboard() {
   const projectsByWeek = [4, 5, 6, 9];
   const projectsThisMonth = projectsByWeek.reduce((total, count) => total + count, 0);
-  return `<article id="specimen" data-canvas-role="background" style="${style}" aria-label="Sample website">
+  return `<article id="specimen" data-canvas-role="background" aria-label="Sample website">
     <div class="dashboard-heading"><h3 data-canvas-role="text">Workspace</h3><p data-canvas-role="text">Manage your team and plan.</p></div>
     <div class="dashboard-grid">
-      <section class="dashboard-card" aria-label="Dashboard card">
-        <h4 data-canvas-role="text">Activity</h4>
+      <section class="dashboard-card" aria-labelledby="sample-activity">
+        <h4 id="sample-activity" data-canvas-role="text">Activity</h4>
         <p class="dashboard-metric">${projectsThisMonth} <span class="dashboard-badge">Active</span></p>
         <p class="dashboard-muted">Projects this month</p>
         <ul class="dashboard-chart" role="list" aria-label="Projects per week">
           ${projectsByWeek.map((count, index) => `<li><span>${count}</span> <span class="dashboard-bar" style="--projects:${count}" aria-hidden="true"></span> <span>Wk ${index + 1}</span></li>`).join("")}
         </ul>
         <div class="dashboard-alert">
-          <span class="dashboard-alert-message"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 5v3m0 2v1" stroke="currentColor" stroke-width="2"/></svg>Usage report is ready</span>
+          <span class="dashboard-alert-message"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 5v3m0 2v1" stroke="currentColor" stroke-width="2"/></svg>Usage report ready</span>
           <button type="button" class="dashboard-report" data-canvas-role="accent">View report</button>
         </div>
       </section>
-      <section class="dashboard-card" aria-label="Pricing and inputs">
-        <h4 data-canvas-role="text">Plans</h4>
-        <table><thead><tr><th scope="col">Plan</th><th scope="col">Monthly</th></tr></thead><tbody><tr><th scope="row">Starter</th><td>$12</td></tr><tr><th scope="row">Team</th><td>$24</td></tr></tbody></table>
-        <div class="dashboard-form"><label>Email<input type="email" id="sample-email" placeholder="you@example.com" autocomplete="off"></label>
-        <button type="button" id="specimen-button" data-canvas-role="accent" aria-label="Tune accent"><span data-canvas-role="onAccent">Try</span></button></div>
+      <section class="dashboard-card" aria-labelledby="sample-plans">
+        <h4 id="sample-plans" data-canvas-role="text">Plans</h4>
+        <table class="dashboard-plans"><thead><tr><th scope="col">Plan</th><th scope="col">Monthly</th></tr></thead><tbody><tr><th scope="row">Starter</th><td>$12</td></tr><tr><th scope="row">Team</th><td>$24</td></tr></tbody></table>
+      </section>
+      <section class="dashboard-card" aria-labelledby="sample-calendar">
+        <h4 id="sample-calendar" data-canvas-role="text">Calendar</h4>
+        ${calendar()}
+      </section>
+      <section class="dashboard-card" aria-labelledby="sample-project">
+        <h4 id="sample-project" data-canvas-role="text">New project</h4>
+        <form class="dashboard-form" aria-labelledby="sample-project" autocomplete="off">
+          <label>Project name<input type="text" id="sample-project-name"></label>
+          <label>Email<input type="email" id="sample-email" placeholder="you@example.com"></label>
+          <button type="button" id="specimen-button" data-canvas-role="accent" aria-label="Tune accent"><span data-canvas-role="onAccent">Try</span></button>
+        </form>
       </section>
     </div>
   </article>`;

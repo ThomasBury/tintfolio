@@ -13,7 +13,6 @@ const shapes: Record<string, string> = {
     '<path d="M3 7h6m5 0h7M3 17h11m5 0h2"/><circle cx="11.5" cy="7" r="2.5"/><circle cx="16.5" cy="17" r="2.5"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
-  pen: '<path d="m5 15 10-10 4 4L9 19l-5 1zM13 7l4 4"/>',
   layers: '<path d="m3 8 9-5 9 5-9 5zM3 12l9 5 9-5M3 16l9 5 9-5"/>',
 };
 export const icon = (name: string) =>

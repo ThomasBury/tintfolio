@@ -34,9 +34,9 @@ function starters(tool: Tool): Combination[] {
   });
 }
 
-function card(combination: Combination, selected?: Combination["id"]) {
+function card(combination: Combination, tool: Tool, selected?: Combination["id"]) {
   const { id, swatches } = combination;
-  const codes = swatches.flatMap(({ code }) => code ? [escapeText(code)] : []).join(" · ");
+  const codes = tool === "paint" ? swatches.flatMap(({ code }) => code ? [escapeText(code)] : []).join(" · ") : "";
   return `<button type="button" class="wada-card" data-combination="${escapeText(String(id))}" aria-pressed="${selected === id}">
     <span class="wada-band" aria-hidden="true">${swatches.map(({ hex }) => chip(hex)).join("")}</span>
     <span class="wada-label"><b>${combinationName(combination)}</b>${codes ? `<small>${codes}</small>` : ""}</span>
@@ -166,7 +166,7 @@ export function mountCollection(
     }
     const focused = document.activeElement instanceof HTMLButtonElement && results.contains(document.activeElement)
       ? document.activeElement.dataset.combination : undefined;
-    results.innerHTML = resultsOrder.slice(0, visible).map((item) => card(item, selected)).join("");
+    results.innerHTML = resultsOrder.slice(0, visible).map((item) => card(item, tool, selected)).join("");
     if (focused) {
       const button = results.querySelector<HTMLButtonElement>(`[data-combination="${CSS.escape(focused)}"]`);
       (button ?? search).focus({ preventScroll: true });
@@ -203,7 +203,7 @@ export function mountCollection(
   function append(advanceFocus: boolean) {
     const first = visible;
     visible += pageSize;
-    results.insertAdjacentHTML("beforeend", resultsOrder.slice(first, visible).map((item) => card(item, selected)).join(""));
+    results.insertAdjacentHTML("beforeend", resultsOrder.slice(first, visible).map((item) => card(item, tool, selected)).join(""));
     if (advanceFocus) (results.children[first] as HTMLButtonElement | undefined)?.focus();
     updateControls();
   }

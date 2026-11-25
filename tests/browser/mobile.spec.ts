@@ -351,18 +351,26 @@ test("all Website cards are reachable and scroll position survives theme and pal
     await expect(cards.getByRole("heading", { name: "Calendar" })).not.toBeInViewport();
     await preview.press("End");
     const scrolled = () => preview.evaluate((node) => node.scrollTop);
-    await expect.poll(scrolled).toBeGreaterThan(0);
+    await expect.poll(() => preview.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop))
+      .toBeLessThanOrEqual(1);
     const form = preview.getByRole("form", { name: "New project" });
     await onScreen(cards.getByRole("heading", { name: "Calendar" }));
     await onScreen(form.getByLabel("Project name"));
     await form.getByLabel("Project name").fill("Studio refresh");
-    await form.getByLabel("Email").fill("studio@example.com");
-    const position = await scrolled();
+    const email = form.getByLabel("Email");
+    await email.fill("studio@example.com");
+    await email.blur();
+    const position = await preview.evaluate((node) => {
+      node.scrollTo({ top: node.scrollHeight - node.clientHeight - 16, behavior: "instant" });
+      return node.scrollTop;
+    });
+    expect(position).toBeGreaterThan(0);
     await page.getByRole("radio", { name: "Dark" }).tap();
     expect(await scrolled()).toBe(position);
     await page.locator(".wada-card").first().tap();
     expect(await scrolled()).toBe(position);
     await expect(form.getByLabel("Project name")).toHaveValue("Studio refresh");
+    await expect(email).toHaveValue("studio@example.com");
     const tryButton = form.getByRole("button", { name: "Tune accent" });
     expect((await tryButton.boundingBox())!.width).toBe((await form.boundingBox())!.width);
     await tryButton.tap();

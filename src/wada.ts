@@ -75,7 +75,8 @@ export function matchingCombinations(
             combinationPigments(combination).toLowerCase() === term)) ||
           combinationName(combination).toLowerCase().includes(term) ||
           swatches.some(({ name, code, hex }) =>
-            name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term)));
+            name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term)) ||
+          swatches.some((swatch) => getColorDisplayName(swatch.hex, swatch).toLowerCase().includes(term)));
   });
 }
 

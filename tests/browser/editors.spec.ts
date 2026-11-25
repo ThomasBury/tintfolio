@@ -731,7 +731,7 @@ test("both default studios and their guide links fit on desktop arrival", async 
   }
 });
 
-test("Pantone codes remain searchable in both studios and are displayed in Paint rows", async ({ page }) => {
+test("Pantone codes and displayed pigment names are searchable in both studios", async ({ page }) => {
   for (const route of ["paint", "web"]) {
     await page.goto(`/${route}/`);
     const card = await find(page, "12-0815 TCX");
@@ -739,6 +739,12 @@ test("Pantone codes remain searchable in both studios and are displayed in Paint
     await expect(card.locator("small")).toHaveText("Vanilla Custard · Flamingo Plume · Brandy Brown");
     await expect(card).toHaveAttribute("title", "#F2E5CD · #D58592 · #783E33");
     await expect(card.locator(".wada-codes")).toHaveCount(route === "paint" ? 1 : 0);
+
+    await page.getByLabel("Search palettes").fill("532 C");
+    const named = combinations(page).getByRole("button", { name: /^Pantone 532 C, P 1-1 C & 232 U Midnight Ink/ });
+    await expect(named).toBeVisible();
+    await page.getByLabel("Search palettes").fill("midnight ink");
+    await expect(named).toBeVisible();
   }
 });
 

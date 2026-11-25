@@ -30,9 +30,10 @@ test("combination #48 applies on the sticky room, preserves room and floor, and 
   await expect(page.getByRole("link", { name: "A Dictionary of Color Combinations" })).toHaveAttribute("href", /seigensha/);
   await page.getByRole("button", { name: /^Filters/ }).click();
   await page.getByLabel("Source").selectOption("wada");
-  await expect(library.locator(".wada-card").first()).toHaveText(/Combination #4.*Isabella Color · Red Violet/);
-  const card = await find(page, "#48");
-  await expect(card).toHaveAccessibleName("Combination #48 Rosolanc Purple · Helvetia Blue");
+  await expect(library.locator(".wada-card").first()).toHaveText(/Combination #4.*Red Violet · Isabella Color/);
+  const card = await find(page, "#005b8d · #b73f74");
+  await expect(card).toHaveAccessibleName("Combination #48 Helvetia Blue · Rosolanc Purple");
+  await expect(card.locator(".chip").first()).toHaveCSS("background-color", rgb("#005B8D"));
   await card.scrollIntoViewIfNeeded();
   await card.focus();
   const scroll = await page.evaluate(() => scrollY);
@@ -40,7 +41,8 @@ test("combination #48 applies on the sticky room, preserves room and floor, and 
   await expect(card).toBeFocused();
   await expect(card).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#status")).toHaveText("Combination #48 applied.");
-  await expect(fill(page, "wall")).not.toHaveCSS("fill", rgb("#123456"));
+  await expect(fill(page, "wall")).toHaveCSS("fill", rgb("#B73F74"));
+  await expect(fill(page, "feature")).toHaveCSS("fill", rgb("#005B8D"));
   await expect(fill(page, "floor")).toHaveCSS("fill", rgb("#57616B"));
   await expect(page.getByLabel("Room", { exact: true })).toHaveValue("bedroom");
   expect(await page.locator("#room").evaluate((item) => {
@@ -959,7 +961,8 @@ for (const route of ["paint", "web"]) {
     await expect(search).toBeFocused();
     await expect(search).toHaveValue("#48");
     await expect(filters).toHaveText("Filters");
-    await expect(cards).toHaveText(/Combination #48.*Rosolanc Purple · Helvetia Blue/);
+    const pigments = route === "paint" ? "Helvetia Blue · Rosolanc Purple" : "Rosolanc Purple · Helvetia Blue";
+    await expect(cards.locator(".wada-label small")).toHaveText(pigments);
   });
 
   test(route + " follows native Tune values through edits, role selection and Undo", async ({ page }) => {
@@ -1210,8 +1213,12 @@ for (const tool of ["paint", "web"] as const) {
       combinations: number[][]; swatches: [string, string][];
     };
     const featured = new Set([4, 125, 344]);
-    const entry = (id: string, hexes: string[]) => ({ id, count: hexes.length,
-      label: /^\d+$/.test(id) ? `Combination #${id}` : id, tooltip: hexes.join(" · ") });
+    const entry = (id: string, hexes: string[]) => ({
+      id,
+      count: hexes.length,
+      label: /^\d+$/.test(id) ? `Combination #${id}` : id,
+      tooltip: (tool === "paint" && hexes.length === 2 ? hexes.toReversed() : hexes).join(" · "),
+    });
     const wada = rows.map(([id, ...swatches]) => entry(String(id), swatches.map((index) => pigments[index][1].toUpperCase())));
     const named = namedCombinations.map(({ id, swatches }) => entry(id, swatches.map(({ hex }) => hex)));
     const curated = [

@@ -60,19 +60,22 @@ export function matchingCombinations(
   collection: Combination[],
   count: number,
   query: string,
+  includeReversedPairs = false,
 ) {
   const term = query.trim().toLowerCase();
   const digits = term.replace(/^#\s*/, "");
   const byId = /^[0-9]+$/.test(digits);
   const numericHex = digits.length === 6 ? "#" + digits : "";
-  const byCombinationName = term.includes(" · ");
+  const parts = term.split(" · ");
+  const combinedTerms = [term];
+  if (includeReversedPairs && parts.length === 2) combinedTerms.push(parts.reverse().join(" · "));
   return collection.filter((combination) => {
     const { id, swatches } = combination;
     return (!count || swatches.length === count) &&
       (byId
         ? id === Number(digits) || swatches.some(({ hex }) => hex.toLowerCase() === numericHex)
-        : (byCombinationName && (combinationHexes(combination).toLowerCase() === term ||
-            combinationPigments(combination).toLowerCase() === term)) ||
+        : (parts.length > 1 && (combinedTerms.includes(combinationHexes(combination).toLowerCase()) ||
+            combinedTerms.includes(combinationPigments(combination).toLowerCase()))) ||
           combinationName(combination).toLowerCase().includes(term) ||
           swatches.some(({ name, code, hex }) =>
             name.toLowerCase().includes(term) || code?.toLowerCase().includes(term) || hex.toLowerCase().includes(term)) ||

@@ -36,11 +36,15 @@ function starters(tool: Tool): Combination[] {
 }
 
 function card(combination: Combination, tool: Tool, selected?: Combination["id"]) {
-  const { id, swatches } = combination;
+  const { id } = combination;
+  const display = tool === "paint" && combination.swatches.length === 2
+    ? { ...combination, swatches: [combination.swatches[1], combination.swatches[0]] }
+    : combination;
+  const { swatches } = display;
   const codes = tool === "paint" ? swatches.flatMap(({ code }) => code ? [code] : []).join(" · ") : "";
-  return `<button type="button" class="wada-card" data-combination="${escapeText(String(id))}" aria-pressed="${selected === id}" title="${combinationHexes(combination)}">
+  return `<button type="button" class="wada-card" data-combination="${escapeText(String(id))}" aria-pressed="${selected === id}" title="${combinationHexes(display)}">
     <span class="wada-band" aria-hidden="true">${swatches.map(({ hex }) => chip(hex)).join("")}</span>
-    <span class="wada-label"><b>${escapeText(combinationName(combination))}</b><small>${escapeText(combinationPigments(combination))}</small>${codes ? `<code class="wada-codes">${escapeText(codes)}</code>` : ""}</span>
+    <span class="wada-label"><b>${escapeText(combinationName(combination))}</b><small>${escapeText(combinationPigments(display))}</small>${codes ? `<code class="wada-codes">${escapeText(codes)}</code>` : ""}</span>
   </button>`;
 }
 
@@ -151,7 +155,7 @@ export function mountCollection(
 
   function filter() {
     audition();
-    matches = matchingCombinations(collection, Number(count.value), search.value).filter((item) => {
+    matches = matchingCombinations(collection, Number(count.value), search.value, tool === "paint").filter((item) => {
       if (source.value && source.value !== (typeof item.id === "number" ? "wada" : "curated")) return false;
       if (style.value === "bold") return item.tags?.mood === "Bold";
       if (style.value === "warm") return item.tags?.warmNeutral;

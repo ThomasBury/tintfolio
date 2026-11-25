@@ -39,7 +39,7 @@ for (const route of ["paint", "web"]) {
     const preview = page.locator("#picture");
     const canvasBefore = await preview.innerHTML();
     await page.getByLabel("Search palettes").fill("#48");
-    const card = page.getByRole("button", { name: "#B73F74 · #005B8D", exact: true });
+    const card = page.getByRole("button", { name: /^Combination #48 / });
     await card.scrollIntoViewIfNeeded();
     await card.focus();
     await card.press("Enter");
@@ -117,7 +117,7 @@ test("floor editing stays independent and the print spec fits at 320 pixels", as
   await expect(illustratedFloor).toHaveCSS("fill", "rgb(210, 177, 140)");
 
   await page.getByLabel("Search palettes").fill("#344");
-  const card = page.getByRole("button", { name: "#FDC57E · #1C4286 · #A36AA5 · #111314", exact: true });
+  const card = page.getByRole("button", { name: /^Combination #344 / });
   await card.tap();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: "Undo palette" }).press("Space");
@@ -126,11 +126,14 @@ test("floor editing stays independent and the print spec fits at 320 pixels", as
   const pair = surfaces.getByRole("radio", { name: "Feature wall" });
   await pair.tap();
   await expect(pair).toBeChecked();
-  const wall = surfaces.getByLabel("Main wall", { exact: true });
+  await expect(surfaces.getByRole("combobox")).toHaveCount(0);
+  await page.locator("#role-wall").tap();
+  const wall = page.getByLabel("Palette colour for main wall");
+  await wall.scrollIntoViewIfNeeded();
   await wall.selectOption("2");
   await expect(page.locator("[data-surface=wall]").first()).toHaveCSS("fill", "rgb(163, 106, 165)");
   await onScreen(wall);
-  await onScreen(page.locator("#room"));
+  await surfaces.scrollIntoViewIfNeeded();
   await page.setViewportSize({ width: 320, height: 340 });
   await floor.scrollIntoViewIfNeeded();
   await onScreen(floor);
@@ -166,8 +169,8 @@ test("paint layout, lighting and the ceiling editor work by keyboard and touch a
   await expect(swatches.locator("code")).toHaveText(["#A9B39E", "#66765E", "#F5F0E6"]);
   await expect(swatches.getByText("Main wall", { exact: true })).toBeVisible();
   await expect(swatches.getByText("Feature wall", { exact: true })).toBeVisible();
-  const editCeiling = swatches.getByRole("button", { name: /^Edit Ceiling #/ });
-  await expect(editCeiling.locator("span")).toHaveText("Ceiling");
+  const editCeiling = swatches.getByRole("button", { name: /^Edit Ceiling, / });
+  await expect(editCeiling.locator(".swatch-role")).toHaveText("Ceiling");
   await editCeiling.locator(".chip").tap();
   await expect(editCeiling).toBeFocused();
   const hex = page.getByLabel("Ceiling HEX");
@@ -191,7 +194,7 @@ test("paint layout, lighting and the ceiling editor work by keyboard and touch a
       await action.tap();
     }
     await expect(floor).toHaveValue("#d2b18c");
-    await expect(swatches.getByRole("button", { name: "Edit Ceiling #F5F0E6" })).toBeVisible();
+    await expect(swatches.getByRole("button", { name: "Edit Ceiling, Ivory" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   }
 });
@@ -317,7 +320,7 @@ test("the Website activity chart and report action fit the 320-pixel preview", a
   await onScreen(chart);
   await onScreen(report);
   await report.tap();
-  await expect(page.getByRole("button", { name: /^Edit Accent #/ })).toBeFocused();
+  await expect(page.getByRole("button", { name: /^Edit Accent, / })).toBeFocused();
   await onScreen(page.locator("#role-strip"));
   const tiles = page.locator(".tile");
   await expect(tiles).toHaveCount(4);
@@ -357,9 +360,9 @@ test("all Website cards are reachable and scroll position survives theme and pal
     await onScreen(cards.getByRole("heading", { name: "Calendar" }));
     await onScreen(form.getByLabel("Project name"));
     await form.getByLabel("Project name").fill("Studio refresh");
-    const email = form.getByLabel("Email");
-    await email.fill("studio@example.com");
-    await email.blur();
+    const workspace = form.getByLabel("Workspace");
+    await workspace.fill("Design team");
+    await workspace.blur();
     const position = await preview.evaluate((node) => {
       node.scrollTo({ top: node.scrollHeight - node.clientHeight - 16, behavior: "instant" });
       return node.scrollTop;
@@ -370,10 +373,10 @@ test("all Website cards are reachable and scroll position survives theme and pal
     await page.locator(".wada-card").first().tap();
     expect(await scrolled()).toBe(position);
     await expect(form.getByLabel("Project name")).toHaveValue("Studio refresh");
-    await expect(email).toHaveValue("studio@example.com");
-    const tryButton = form.getByRole("button", { name: "Tune accent" });
-    expect((await tryButton.boundingBox())!.width).toBe((await form.boundingBox())!.width);
-    await tryButton.tap();
+    await expect(workspace).toHaveValue("Design team");
+    const create = form.getByRole("button", { name: "Create project" });
+    expect((await create.boundingBox())!.width).toBe((await form.boundingBox())!.width);
+    await create.tap();
     await expect(page.getByRole("tab", { name: "Tune" })).toHaveAttribute("aria-selected", "true");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
     expect(await preview.evaluate((node) => node.scrollWidth)).toBe(await preview.evaluate((node) => node.clientWidth));

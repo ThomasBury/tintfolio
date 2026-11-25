@@ -5,13 +5,14 @@ import {
 } from "./design.ts";
 import { oklab, oklch } from "culori";
 import { correction, parseColour, suggestions, toHex } from "./colour.ts";
+import { getColorDisplayName } from "./colour-name.ts";
 import { exportTheme, formats, sheet, type ExportFormat } from "./export.ts";
 import { icon } from "./icons.ts";
 import { room } from "./room.ts";
 import { assignmentSelect, chip, escapeText, mountCollection } from "./collection.ts";
-import { assignWeb, combinationName, type Assignment, type Combination } from "./wada.ts";
+import { assignWeb, combinationName, combinationPigments, type Assignment, type Combination } from "./wada.ts";
 import {
-  contrastResults, dashboard, formatLc, resolveWeb, textContrast, tokenLabels, webTextPairs, type Token,
+  accentTextFix, contrastLevel, contrastResults, dashboard, formatLc, resolveWeb, textContrast, tokenLabels, webTextPairs, type Token,
 } from "./web-preview.ts";
 import { mountSaved } from "./saved.ts";
 import { mountPhoto } from "./photo.ts";
@@ -43,7 +44,7 @@ function persist() {
 
 function applyDesign(design: Design, announcement: string, trigger?: HTMLElement, selection?: typeof selected) {
   const active = document.activeElement === trigger;
-  const surfacesChanged = paint && (design.mode !== d.mode || !!selection !== !!selected);
+  const surfacesChanged = paint && (design.mode !== d.mode || design.pair !== d.pair || !!selection !== !!selected);
   if (JSON.stringify(design) !== JSON.stringify(d)) {
     const keepCeiling = paint && design.mode === "pair" && design.pair === "feature" &&
       d.mode === "pair" && d.pair === "feature" && design.colours.ceiling === d.colours.ceiling &&
@@ -166,13 +167,23 @@ function strip() {
     const locked = locks.has(r);
     const name = editLabel(r);
     const value = token && tokens ? tokens[token] : d.colours[r];
+    const metadata = selected?.combination.swatches.find((swatch) => swatch.hex.toUpperCase() === value.toUpperCase());
+    const pigment = escapeText(getColorDisplayName(value, metadata));
     const metrics = against && tokens ? textContrast(value, tokens[against]) : undefined;
+    const fix = r === "onAccent" && tokens ? accentTextFix(tokens) : undefined;
     return `<div class="active-swatch">
-      <button type="button" id="role-${r}" data-role="${r}" class="tile" aria-pressed="${current}" aria-label="Edit ${name} ${value}" ${metrics ? `aria-describedby="metrics-${r}"` : ""}>
-        ${chip(value)}<span>${name}</span><code>${value}</code>
-        ${metrics ? `<span id="metrics-${r}" class="swatch-metrics"><span class="sr">WCAG 2.2 normal text </span><data value="${metrics.ratio}">${metrics.ratio.toFixed(2)}:1</data> ${metrics.grade}<br> <span>APCA ${formatLc(metrics.lc)}</span></span>` : ""}
+      <button type="button" id="role-${r}" data-role="${r}" class="tile" aria-pressed="${current}" aria-label="Edit ${name}, ${pigment}" title="${pigment} · ${value}" ${metrics ? `aria-describedby="metrics-${r}"` : ""}>
+        ${chip(value)}<span class="swatch-role">${name}</span><span class="swatch-name">${pigment}</span><code>${value}</code>
+        ${metrics ? `<span id="metrics-${r}" class="swatch-metrics">
+          ${r === "accent" ? "<span>vs Background</span>" : ""}
+          <span>${r === "accent" ? "WCAG " : '<span class="sr">WCAG 2.2 normal text </span>'}<data value="${metrics.ratio}">${metrics.ratio.toFixed(2)}:1</data>${r === "accent" ? "" : ` ${metrics.grade}`}</span>
+          <span class="swatch-apca">APCA ${formatLc(metrics.lc)}</span>
+          <span>${contrastLevel(metrics.lc)}</span>
+        </span>` : ""}
       </button>
       <button type="button" id="lock-${r}" data-lock="${r}" class="lock" aria-pressed="${locked}" aria-label="Lock ${labels[r]}" title="${locked ? "Unlock" : "Lock"} ${labels[r]}">${icon(locked ? "lock" : "unlock")}</button>
+      ${fix ? `<button type="button" id="auto-fix-accent-text" class="auto-fix" ${fix === value
+        ? 'disabled title="Best of white and near-black is already applied"' : `title="Use ${escapeText(getColorDisplayName(fix))}"`}>Auto-fix</button>` : ""}
     </div>`;
   }
   if (paint) {
@@ -191,7 +202,7 @@ function strip() {
     const [textToken, backgroundToken] = webTextPairs[index];
     const label = `Swap ${labels[bg]} and ${labels[fg]}`;
     return `<div class="swatch-pair">
-      ${swatch(bg, backgroundToken)}
+      ${swatch(bg, backgroundToken, bg === "accent" ? "background" : undefined)}
       <button type="button" id="${id}" class="outline swap-pair" aria-label="${label}" title="${label}${index ? "" : " (S)"}" ${canSwap(index === 1) ? "" : "disabled"}>⇄</button>
       ${swatch(fg, textToken, backgroundToken)}
     </div>`;
@@ -320,15 +331,16 @@ function radioGroup(name: string, label: string, options: Record<string, string>
     ).join("")}</div></fieldset>`;
 }
 
-function paintSwatches() {
-  if (!selected || d.mode !== "pair") return "";
+function paintAssignment() {
+  if (!selected || d.mode !== "pair" || (role !== "wall" && role !== d.pair)) return "";
   const { combination, wall, secondary } = selected;
+  if (combination.swatches.length <= 2) return "";
   const currentIndex = (index: number, target: Role) =>
     combination.swatches[index].hex.toUpperCase() === d.colours[target] ? index : -1;
   const wallIndex = currentIndex(wall, "wall");
   const secondaryIndex = currentIndex(secondary, d.pair);
-  return assignmentSelect("wall", combination, wallIndex, secondaryIndex, d.colours.wall) +
-    assignmentSelect(d.pair, combination, secondaryIndex, wallIndex, d.colours[d.pair]);
+  const [index, other] = role === "wall" ? [wallIndex, secondaryIndex] : [secondaryIndex, wallIndex];
+  return assignmentSelect(role, combination, index, other, d.colours[role]);
 }
 
 function colourFields(value: string, label: string, prefix = "") {
@@ -345,44 +357,50 @@ function paintTools() {
   const layout = radioGroup("paint-layout", "Paint layout",
     { single: "One colour", ceiling: "Separate ceiling", feature: "Feature wall" },
     d.mode === "single" ? "single" : d.pair);
-  const assignment = selected && d.mode === "pair"
-    ? `${selected.combination.swatches.length > 2 ? '<p class="swatch-help">Choose which two palette colours to apply.</p>' : ""}
-       <div class="swatch-fields" id="swatch-fields">${paintSwatches()}</div>` : "";
-  return `${layout}
-      <div class="floor-control"><label>Existing floor <span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button type="button" id="reset-floor" class="outline surface-action" ${d.floor ? "" : "disabled"}>Reset floor</button></div>
+  return `<div class="surface-row">${layout}
+      <div class="floor-control"><label>Existing floor <span class="picker"><input id="floor" type="color" value="${d.floor ?? defaultFloor}"></span></label><button type="button" id="reset-floor" class="outline surface-action" ${d.floor ? "" : "disabled"}>Reset floor</button></div></div>
+    <div class="surface-row">
       ${d.mode === "pair" && d.pair === "feature" ? `<div class="ceiling-control"><span>Ceiling</span><button type="button" id="reset-ceiling" class="outline surface-action" ${locks.has("ceiling") ? "disabled" : ""}>Use palette ceiling</button></div>` : ""}
-      <div class="door-control">
-        <div class="door-actions"><span><strong>Door</strong> <span id="door-value">${d.door ?? "Same as main wall"}</span></span>
-          <button type="button" id="edit-door" class="outline surface-action" aria-controls="door-editor" aria-expanded="${doorEditorOpen}">Edit door colour</button></div>
-        <div id="door-editor" ${doorEditorOpen ? "" : "hidden"}>${colourFields(d.door ?? d.colours.wall, "Door", "door-")}</div>
-        <button type="button" id="match-door" class="text-btn" ${d.door ? "" : "hidden"}>Match main wall</button>
-      </div>
-      ${assignment}
-      <div id="canvas-notes"></div>`;
+      <div class="door-actions"><span><strong>Door</strong> <span id="door-value">${d.door ? escapeText(getColorDisplayName(d.door)) : "Same as main wall"}</span></span>
+        <button type="button" id="edit-door" class="outline surface-action" aria-controls="door-editor" aria-expanded="${doorEditorOpen}">Edit door colour</button>
+      </div></div>
+    <div id="door-editor" ${doorEditorOpen ? "" : "hidden"}>${colourFields(d.door ?? d.colours.wall, "Door", "door-")}</div>
+    <button type="button" id="match-door" class="text-btn" ${d.door ? "" : "hidden"}>Match main wall</button>
+    <div id="canvas-notes"></div>`;
 }
 
 function webNotes(changed: Assignment[]) {
   if (!changed.length) return "";
   const notes = changed.map(({ role, hex, source }) => {
     const description = source
-      ? `Adjusted from <code>${source.hex.toUpperCase()}</code>`
+      ? `Adjusted from ${escapeText(getColorDisplayName(source.hex, source))}`
       : "Added";
-    return `<li>${labels[role]} <code>${hex}</code> · ${description}</li>`;
+    return `<li>${labels[role]} · ${escapeText(getColorDisplayName(hex))} · ${description}</li>`;
   }).join("");
   return `<div class="assignment-notes"><b>Palette assignments${d.theme === "dark" ? " before dark preview" : ""}</b><ul>${notes}</ul></div>`;
 }
 
 function updateCanvasNotes() {
-  const name = selected ? escapeText(combinationName(selected.combination)) : "";
-  const note = selected?.combination.note ? " · " + escapeText(selected.combination.note) : "";
+  const combination = selected?.combination;
+  const note = combination?.note ? escapeText(combination.note) : "";
+  const pigments = combination ? escapeText(combinationPigments(combination)) : "";
+  if (paint) {
+    el("canvas-notes").innerHTML = pigments ? `<strong>${pigments}</strong>${note ? ` · ${note}` : ""}` : "";
+    return;
+  }
   const activeRoles = editable(d);
-  const changed = paint ? [] : selected?.assignments.filter(({ role, hex, source }) =>
+  const assignments = selected?.assignments ?? [];
+  const changed = assignments.filter(({ role, hex, source }) =>
     d.colours[role] === hex &&
-    (activeRoles.includes(role) || (d.mode === "text" && selected?.combination.swatches.length === 2)) &&
+    (activeRoles.includes(role) || (d.mode === "text" && combination?.swatches.length === 2)) &&
     (!source || source.hex.toUpperCase() !== hex),
-  ) ?? [];
-  if (!paint) el("assignment-count").textContent = changed.length ? changed.length + " adjusted or added" : "";
-  el("canvas-notes").innerHTML = `${name ? `<span><strong>${name}</strong>${note}</span>` : ""}${webNotes(changed)}`;
+  );
+  const customised = activeRoles.some((role) => !assignments.some((entry) => entry.role === role && entry.hex === d.colours[role]));
+  const title = combination ? `${customised ? "Based on " : ""}${escapeText(combinationName(combination))}` : "Current palette";
+  const guidance = d.mode === "site"
+    ? "Check primary text against the page, and check accent links and button labels separately."
+    : "Check primary text against the background in the active preview theme.";
+  el("canvas-notes").innerHTML = `<strong>${title}</strong><p>${note && !customised && d.theme === "light" ? note : guidance}</p>${webNotes(changed)}`;
 }
 
 function render(focus?: string) {
@@ -394,9 +412,8 @@ function render(focus?: string) {
         ${[["light", "☀", "Light"], ["dark", "☾", "Dark"]].map(([value, symbol, label]) =>
           `<label><input type="radio" id="theme-${value}" name="theme" value="${value}" ${d.theme === value ? "checked" : ""}><span aria-hidden="true">${symbol}</span> ${label}</label>`,
         ).join("")}
-       </div></fieldset>
-       <button type="button" class="text-btn" id="show-contrast">Check contrast</button><small id="assignment-count"></small>`;
-  el("preview-options").innerHTML = previewControl;
+       </div></fieldset>`;
+  el("preview-settings").innerHTML = previewControl;
   updatePreview();
   if (paint) el("room-surfaces-fields").innerHTML = paintTools();
   el("role-strip").innerHTML = strip();
@@ -407,13 +424,14 @@ function render(focus?: string) {
         ${toneControl("lightness", "Lightness", 0, 100, Math.round(oklab(value)!.l * 100))}
         ${toneControl("warmth", "Warmth", -32, 32, warmth(value))}
       </div>
-      ${paint ? '<div id="advice"></div>' : ""}
+      ${paint ? '<div id="advice"></div><div id="paint-assignment"></div>' : ""}
     </div>`;
   updateToneReadout(el("lightness"));
   updateToneReadout(el("warmth"));
   updateCanvasNotes();
   if (!paint) el("key").innerHTML = key();
   el("advice").innerHTML = advice();
+  if (paint) el("paint-assignment").innerHTML = paintAssignment();
   el<HTMLButtonElement>("undo-palette").disabled = !paletteUndo;
   if (focus) el(focus)?.focus({ preventScroll: true });
 }
@@ -437,8 +455,7 @@ function updateColour(value: string, source: string) {
   }
   el("role-strip").innerHTML = strip();
   el("advice").innerHTML = advice();
-  const swatches = document.getElementById("swatch-fields");
-  if (swatches) swatches.innerHTML = paintSwatches();
+  if (paint) el("paint-assignment").innerHTML = paintAssignment();
   updateCanvasNotes();
   el<HTMLInputElement>("picker").value = value;
   if (source !== "hex") el<HTMLInputElement>("hex").value = value;
@@ -480,7 +497,7 @@ function updateDoor(value: string | undefined, source?: string) {
   const field = el<HTMLInputElement>("door-hex");
   if (source !== field.id) field.value = colour;
   colourFeedback(field);
-  el("door-value").textContent = value ?? "Same as main wall";
+  el("door-value").textContent = value ? getColorDisplayName(value) : "Same as main wall";
   el("match-door").hidden = !value;
   persist();
 }
@@ -544,7 +561,12 @@ el("studio").innerHTML = `
   <div class="canvas-stack">
     <section id="preview-card" class="preview-card" aria-labelledby="preview-title">
       <div class="preview-head"><div class="section-heading">${icon(paint ? "room" : "web")}<h2 id="preview-title">${paint ? "Room preview" : "Website preview"}</h2></div>
-        <div id="preview-options" class="preview-options"></div></div>
+        <div class="preview-options"><div id="preview-settings"></div>${paint ? "" : `
+          <button type="button" id="guide-trigger" class="outline" popovertarget="palette-guide"><span aria-hidden="true">?</span> Guide</button>
+          <div id="palette-guide" popover role="region" aria-label="Palette guide">
+            <div id="canvas-notes"></div>
+            ${preset ? "" : '<a href="/website-colours/high-contrast-cream-and-plum-palette">High-contrast cream and plum for websites</a>'}
+          </div>`}</div></div>
       <div id="picture"${paint ? "" : ' tabindex="0" role="region" aria-label="Sample website preview"'}>${paint ? "" : dashboard()}</div>
       ${paint ? "" : '<p class="preview-scroll-hint">Scroll for calendar and form</p>'}
     </section>
@@ -574,7 +596,7 @@ el("studio").innerHTML = `
       <div id="library" class="library palette-scroll" role="tabpanel" aria-labelledby="tab-explore"></div>
       <div id="tune" class="palette-scroll" role="tabpanel" aria-labelledby="tab-tune" hidden>
         <div id="palette-fields"></div>
-        ${paint ? "" : '<div id="contrast-details"><div id="canvas-notes"></div><div id="key"></div><div id="advice"></div></div>'}
+        ${paint ? "" : '<div id="contrast-details"><div id="key"></div><div id="advice"></div></div>'}
       </div>
     </div>
     <div id="role-strip" role="group" aria-label="Active swatches"></div>
@@ -691,6 +713,15 @@ document.addEventListener("click", (event) => {
     if (!open) el("palette-editor").scrollIntoView({ block: "nearest" });
   } else if (id === "swap-colours" || id === "swap-accent") {
     swap(button, id === "swap-accent");
+  } else if (id === "auto-fix-accent-text" && !paint && d.mode === "site") {
+    const fix = accentTextFix(resolveWeb(d));
+    if (!fix || fix === d.colours.onAccent) return;
+    const colours = { ...d.colours, onAccent: fix };
+    const design = { ...d, colours };
+    const name = getColorDisplayName(fix);
+    const note = accentTextFix(resolveWeb(design)) ? " The pair still misses a contrast threshold." : "";
+    applyDesign(design, `Text on accent changed to ${name}.${note}`, button, selected);
+    el("role-onAccent").focus({ preventScroll: true });
   } else if (button.dataset.suggest) {
     updateColour(button.dataset.suggest, id);
     el("undo")?.focus({ preventScroll: true });
@@ -777,7 +808,7 @@ document.addEventListener("change", (event) => {
       role = d.pair;
     }
     undo = null;
-  } else if (input.dataset.swatchRole && selected) {
+  } else if (input.dataset.swatchRole && selected && input.value !== "") {
     const target = input.dataset.swatchRole as Role;
     const index = Number(input.value);
     selected = { ...selected, [target === "wall" ? "wall" : "secondary"]: index };
@@ -846,13 +877,6 @@ el("studio").addEventListener("keydown", (event) => {
 
 el("preview-card").addEventListener("click", (event) => {
   const target = event.target as Element;
-  if (target.id === "show-contrast") {
-    setSheet(true);
-    showTab("tune");
-    el("contrast-details").scrollIntoView({ block: "nearest" });
-    el("tab-tune").focus({ preventScroll: true });
-    return;
-  }
   if (target.closest("input, label, select, summary")) return;
   const surface = target.closest<SVGElement>("[data-surface]")?.dataset.surface;
   if (mobileLayout.matches && (surface === "door" || surface === "floor")) setRoomSurfaces(true);

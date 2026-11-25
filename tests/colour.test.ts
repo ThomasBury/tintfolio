@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { getColorDisplayName } from "../src/colour-name.ts";
 import {
   contrast,
   correction,
@@ -7,6 +8,15 @@ import {
   suggestions,
   toHex,
 } from "../src/colour.ts";
+
+test("display names prefer exact pigment metadata and use perceptual neighbours for custom colours", () => {
+  const pigment = { hex: "#c5a56e", name: "Isabella Color" };
+  assert.equal(getColorDisplayName("#C5A56E", pigment), "Isabella Color");
+  assert.equal(getColorDisplayName("#f3e5d5"), "Warm cream");
+  assert.equal(getColorDisplayName("#C88F77", pigment), "Warm Terracotta");
+  assert.equal(getColorDisplayName("#C78E76", { hex: "#C78E76", name: "#C78E76" }), "Warm Terracotta");
+  assert.equal(getColorDisplayName("#1C1F2A", { hex: "#1C1F2A", name: "532 C" }), "Midnight Ink");
+});
 
 // Inverse OKLab reference primaries from Björn Ottosson's published matrices.
 // Achromatic L=0.5 gives linear RGB 0.125, or 99 in nonlinear 8-bit sRGB.
